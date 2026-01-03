@@ -122,11 +122,10 @@ conflict-marker-style = "git"
 
 ## Sync Model
 
-**Sync at task boundaries only:**
-- Session start: pull
-- `/continue`: pull
-- `/handoff`: push
-- Task complete: push
+**Sync at task boundaries:**
+- `/continue` - session start, pull latest state
+- `/handoff` - mid-task, push with detailed context
+- `/complete` - task done, push and archive
 
 **Last handoff tracking:** Agent records in STATUS.md: `Last handoff: <timestamp> (rev <id>)`
 
@@ -204,6 +203,9 @@ taskman/
 └── cli.py       # CLI (imports core)
 
 ~/.claude/commands/
+├── continue.md      # Skill: resume work
+├── handoff.md       # Skill: mid-task handoff
+├── complete.md      # Skill: task done
 ├── describe.md      # Skill: runs `taskman describe`
 ├── sync.md          # Skill: runs `taskman sync`
 ├── history-diffs.md # Skill: runs `taskman history-diffs`
@@ -318,12 +320,14 @@ Agent resolves with Edit, calls `sync()` to complete.
 
 ## Handoff Types
 
-**handoff_detailed (mid-task):** Comprehensive to avoid repeating mistakes.
+**`/handoff` (mid-task):** Comprehensive to avoid repeating mistakes.
 - Attempts: what was tried, what failed
 - Summary: current state, learnings, next steps
 - Notes: breadcrumbs (file:line references)
 
-**handoff_next_task (task complete):** Brief pointer to next task.
+**`/complete` (task done):** Brief, archives the task.
+- Mark task complete, move to _archive/
+- Pointer to next task (if any)
 
 **Breadcrumbs principle:** Include enough to reconstruct, not everything.
 
