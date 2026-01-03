@@ -13,6 +13,9 @@ def main() -> None:
     install = subparsers.add_parser("install")
     install.add_argument("agent", choices=["claude", "cursor", "codex"])
     subparsers.add_parser("install-skills")
+    uninstall = subparsers.add_parser("uninstall")
+    uninstall.add_argument("agent", choices=["claude", "cursor", "codex"])
+    subparsers.add_parser("uninstall-skills")
     subparsers.add_parser("serve")
 
     # Operation commands
@@ -47,6 +50,10 @@ def main() -> None:
         print(core.install_mcp(args.agent))
     elif args.command == "install-skills":
         print(core.install_skills())
+    elif args.command == "uninstall":
+        print(core.uninstall_mcp(args.agent))
+    elif args.command == "uninstall-skills":
+        print(core.uninstall_skills())
     elif args.command == "serve":
         from taskman.server import main as server_main
 

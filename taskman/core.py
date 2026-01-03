@@ -52,13 +52,24 @@ def _status_has_conflicts(status_out: str) -> bool:
     return bool(re.search(r"(?im)^(conflicts|conflicted)\b", status_out))
 
 
-def _rev_list(start_rev: str, end_rev: str, cwd: Path) -> list[str]:
-    revset = f"{start_rev}::{end_rev}"
+def _rev_list_for_revset(revset: str, cwd: Path) -> list[str]:
     _, out, _ = run_jj(
-        ["log", "--no-graph", "-r", revset, "-T", "change_id.short()"],
+        ["log", "--no-graph", "-r", revset, "-T", 'change_id.short() ++ "\\n"'],
         cwd,
     )
     return [line.strip() for line in out.splitlines() if line.strip()]
+
+
+def _revset_has_revs(revset: str, cwd: Path) -> bool:
+    return bool(_rev_list_for_revset(revset, cwd))
+
+
+def _rev_list(start_rev: str, end_rev: str, cwd: Path) -> list[str]:
+    if _revset_has_revs(start_rev, cwd):
+        revset = f"{start_rev}::{end_rev}"
+    else:
+        revset = f"::{end_rev}"
+    return _rev_list_for_revset(revset, cwd)
 
 
 def _escape_revset_value(value: str) -> str:
@@ -152,8 +163,13 @@ def history_batch(file: str, start_rev: str, end_rev: str = "@") -> str:
 
     sections: list[str] = []
     for rev in revs:
+        try:
+            _, out, _ = run_jj(["file", "show", "-r", rev, file], cwd)
+        except RuntimeError as exc:
+            if "no such path" in str(exc).lower():
+                continue
+            raise
         sections.append(f"=== {rev} ===")
-        _, out, _ = run_jj(["file", "show", "-r", rev, file], cwd)
         sections.append(out.rstrip())
 
     return "\n".join(sections).rstrip()
@@ -386,3 +402,79 @@ def install_skills() -> str:
         count += 1
 
     return f"Installed {count} skills to {dest_dir}"
+
+
+def uninstall_mcp(agent: str) -> str:
+    """Remove MCP config for agent (claude, cursor, codex)."""
+    home = Path.home()
+    if agent == "claude":
+        project_config = Path(".mcp.json")
+        path = project_config if project_config.exists() else home / ".claude.json"
+        if not path.exists():
+            return f"No MCP config found at {path}"
+        data = _load_json(path)
+        servers = data.get("mcpServers")
+        if isinstance(servers, dict) and "taskman" in servers:
+            servers.pop("taskman", None)
+            if servers:
+                data["mcpServers"] = servers
+            else:
+                data.pop("mcpServers", None)
+            _write_json(path, data)
+            return f"Removed taskman MCP server from {path}"
+        return f"No taskman MCP server entry found in {path}"
+
+    if agent == "cursor":
+        project_config = Path(".cursor") / "mcp.json"
+        path = project_config if project_config.exists() else home / ".cursor" / "mcp.json"
+        if not path.exists():
+            return f"No MCP config found at {path}"
+        data = _load_json(path)
+        servers = data.get("mcpServers")
+        if isinstance(servers, dict) and "taskman" in servers:
+            servers.pop("taskman", None)
+            if servers:
+                data["mcpServers"] = servers
+            else:
+                data.pop("mcpServers", None)
+            _write_json(path, data)
+            return f"Removed taskman MCP server from {path}"
+        return f"No taskman MCP server entry found in {path}"
+
+    if agent == "codex":
+        path = home / ".codex" / "config.toml"
+        if not path.exists():
+            return f"No MCP config found at {path}"
+        data = _load_toml(path)
+        servers = data.get("mcp_servers")
+        if isinstance(servers, dict) and "taskman" in servers:
+            servers.pop("taskman", None)
+            if servers:
+                data["mcp_servers"] = servers
+            else:
+                data.pop("mcp_servers", None)
+            path.write_text(_toml_dumps(data), encoding="utf-8")
+            return f"Removed taskman MCP server from {path}"
+        return f"No taskman MCP server entry found in {path}"
+
+    raise ValueError(f"Unknown agent: {agent}")
+
+
+def uninstall_skills() -> str:
+    """Remove taskman skill files from ~/.claude/skills/"""
+    skills_dir = Path(__file__).resolve().parent.parent / "skills"
+    if not skills_dir.is_dir():
+        raise FileNotFoundError(f"skills directory not found: {skills_dir}")
+
+    dest_dir = Path.home() / ".claude" / "skills"
+    if not dest_dir.is_dir():
+        return f"No skills directory found at {dest_dir}"
+
+    count = 0
+    for path in skills_dir.glob("*.md"):
+        dest_path = dest_dir / path.name
+        if dest_path.exists():
+            dest_path.unlink()
+            count += 1
+
+    return f"Removed {count} skills from {dest_dir}"

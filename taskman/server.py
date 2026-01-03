@@ -1,8 +1,21 @@
+import asyncio
 from mcp.server.fastmcp import FastMCP
 
 from taskman import core
 
-mcp = FastMCP("taskman")
+
+class _SyncMCP:
+    def __init__(self, inner: FastMCP) -> None:
+        self._inner = inner
+
+    def list_tools(self):
+        return asyncio.run(self._inner.list_tools())
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+
+mcp = _SyncMCP(FastMCP("taskman"))
 
 
 @mcp.tool()
