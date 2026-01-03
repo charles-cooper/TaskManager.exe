@@ -9,14 +9,16 @@ def main() -> None:
 
     # Setup commands
     subparsers.add_parser("init")
-    subparsers.add_parser("wt")
-    install = subparsers.add_parser("install")
-    install.add_argument("agent", choices=["claude", "cursor", "codex"])
+    install_mcp = subparsers.add_parser("install-mcp")
+    install_mcp.add_argument("agent", choices=["claude", "cursor", "codex"])
     subparsers.add_parser("install-skills")
-    uninstall = subparsers.add_parser("uninstall")
-    uninstall.add_argument("agent", choices=["claude", "cursor", "codex"])
+    uninstall_mcp = subparsers.add_parser("uninstall-mcp")
+    uninstall_mcp.add_argument("agent", choices=["claude", "cursor", "codex"])
     subparsers.add_parser("uninstall-skills")
-    subparsers.add_parser("serve")
+    subparsers.add_parser("stdio")
+
+    wt_parser = subparsers.add_parser("wt")
+    wt_parser.add_argument("name", help="worktree name (created under worktrees/<name>/)")
 
     # Operation commands
     desc = subparsers.add_parser("describe")
@@ -45,16 +47,16 @@ def main() -> None:
     if args.command == "init":
         print(core.init())
     elif args.command == "wt":
-        print(core.wt())
-    elif args.command == "install":
+        print(core.wt(args.name))
+    elif args.command == "install-mcp":
         print(core.install_mcp(args.agent))
     elif args.command == "install-skills":
         print(core.install_skills())
-    elif args.command == "uninstall":
+    elif args.command == "uninstall-mcp":
         print(core.uninstall_mcp(args.agent))
     elif args.command == "uninstall-skills":
         print(core.uninstall_skills())
-    elif args.command == "serve":
+    elif args.command == "stdio":
         from taskman.server import main as server_main
 
         server_main()

@@ -247,20 +247,28 @@ def _find_agent_files_git_dir(start: Path | None = None) -> Path:
     raise FileNotFoundError(".agent-files.git directory not found")
 
 
-def wt() -> str:
-    """Clone from root's .agent-files.git/
+def wt(name: str) -> str:
+    """Create git worktree and clone .agent-files
 
     1. Find root repo's .agent-files.git/ (search upward)
-    2. jj git clone {root}/.agent-files.git .agent-files
+    2. Create worktrees/<name>/ via git worktree add
+    3. jj git clone {root}/.agent-files.git worktrees/<name>/.agent-files
     """
     cwd = Path.cwd()
-    clone = cwd / ".agent-files"
-    if clone.exists():
-        raise FileExistsError(".agent-files already exists in this directory")
+    worktree_dir = cwd / "worktrees" / name
+    if worktree_dir.exists():
+        raise FileExistsError(f"worktrees/{name} already exists")
 
     origin = _find_agent_files_git_dir(cwd)
-    run_jj(["git", "clone", str(origin), str(clone)], cwd)
-    return f"Cloned .agent-files from {origin}"
+
+    # Create git worktree
+    _run_cmd_check(["git", "worktree", "add", str(worktree_dir)], cwd=cwd)
+
+    # Clone .agent-files into the worktree
+    clone = worktree_dir / ".agent-files"
+    run_jj(["git", "clone", str(origin), str(clone)], worktree_dir)
+
+    return f"Created worktree at worktrees/{name}/ with .agent-files cloned from {origin}"
 
 
 def _load_json(path: Path) -> dict:
@@ -354,7 +362,7 @@ def install_mcp(agent: str) -> str:
         data["mcpServers"]["taskman"] = {
             "type": "stdio",
             "command": "taskman",
-            "args": ["serve"],
+            "args": ["stdio"],
         }
         _write_json(path, data)
         return f"Installed taskman MCP server in {path}"
@@ -367,7 +375,7 @@ def install_mcp(agent: str) -> str:
         data["mcpServers"]["taskman"] = {
             "type": "stdio",
             "command": "taskman",
-            "args": ["serve"],
+            "args": ["stdio"],
         }
         _write_json(path, data)
         return f"Installed taskman MCP server in {path}"
@@ -378,7 +386,7 @@ def install_mcp(agent: str) -> str:
         data.setdefault("mcp_servers", {})
         data["mcp_servers"]["taskman"] = {
             "command": "taskman",
-            "args": ["serve"],
+            "args": ["stdio"],
         }
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(_toml_dumps(data), encoding="utf-8")
