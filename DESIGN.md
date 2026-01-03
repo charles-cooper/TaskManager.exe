@@ -135,8 +135,8 @@ conflict-marker-style = "git"
 ```bash
 # Setup
 taskman init                  # create .agent-files.git/ (bare) + .agent-files/ (clone)
-taskman wt                    # in worktree: clone from root's .agent-files.git/
-taskman install <agent>       # install MCP config (claude, cursor, codex)
+taskman wt <name>             # create worktrees/<name>/ with git worktree + jj clone
+taskman install-mcp <agent>   # install MCP config (claude, cursor, codex)
 taskman install-skills        # install skill files to ~/.claude/commands/
 
 # Operations (used by both MCP and skills)
@@ -144,7 +144,10 @@ taskman describe <reason>                     # create checkpoint
 taskman sync <reason>                         # full sync workflow
 taskman history-diffs <file> <start> [end]    # diffs across range
 taskman history-batch <file> <start> [end]    # versions across range
-taskman history-search <pattern> [file] [mode] [limit]  # search history
+taskman history-search <pattern> [file] [limit]  # search history
+
+# MCP server
+taskman stdio                 # run MCP server (stdio transport)
 ```
 
 ## Dual Interface: MCP + Skills
@@ -347,7 +350,7 @@ Bubble up jj errors to agent. No complex handling - agent decides.
     "taskman": {
       "type": "stdio",
       "command": "taskman",
-      "args": ["serve"]
+      "args": ["stdio"]
     }
   }
 }
@@ -365,5 +368,5 @@ Bubble up jj errors to agent. No complex handling - agent decides.
 ```toml
 [mcp_servers.taskman]
 command = "taskman"
-args = ["serve"]
+args = ["stdio"]
 ```
