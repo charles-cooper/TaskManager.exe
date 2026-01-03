@@ -107,7 +107,7 @@ def sync(reason: str) -> str:
 
     run_jj(["describe", "-m", reason], cwd)
     rev = _current_rev_id(cwd)
-    steps.append(f"describe: {rev}")
+    steps.append(f"rev: {rev}")
 
     run_jj(["git", "fetch"], cwd)
     steps.append("git fetch: ok")
