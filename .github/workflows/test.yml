@@ -8,7 +8,10 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -17,8 +20,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/jj
+            ~/.cargo/.crates.toml
+            ~/.cargo/.crates2.json
+          key: cargo-jj-${{ runner.os }}
+
       - name: Install jj
-        uses: jj-vcs/setup-jj@v1
+        run: command -v jj || cargo install --locked jj-cli
 
       - name: Configure git
         run: |
