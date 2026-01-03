@@ -1,0 +1,19 @@
+[project]
+name = "taskman"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "mcp",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+taskman = "taskman.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
