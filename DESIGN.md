@@ -133,10 +133,41 @@ conflict-marker-style = "git"
 ## CLI (taskman)
 
 ```bash
+# Setup
 taskman init                  # create .agent-files.git/ (bare) + .agent-files/ (clone)
 taskman wt                    # in worktree: clone from root's .agent-files.git/
-taskman install <agent>       # install MCP config for agent (claude, cursor, codex, etc.)
+taskman install <agent>       # install MCP config (claude, cursor, codex)
+taskman install-skills        # install skill files to ~/.claude/commands/
+
+# Operations (used by both MCP and skills)
+taskman describe <reason>                     # create checkpoint
+taskman sync <reason>                         # full sync workflow
+taskman history-diffs <file> <start> [end]    # diffs across range
+taskman history-batch <file> <start> [end]    # versions across range
+taskman history-search <pattern> [file] [mode] [limit]  # search history
 ```
+
+## Dual Interface: MCP + Skills
+
+Both interfaces call the same CLI commands:
+
+```
+┌─────────────┐     ┌─────────────┐
+│  MCP tools  │     │   Skills    │
+└──────┬──────┘     └──────┬──────┘
+       │                   │
+       └───────┬───────────┘
+               ▼
+        taskman CLI
+               │
+               ▼
+         jj commands
+```
+
+**MCP Server**: Calls `taskman` subprocess, returns output
+**Skills**: Markdown prompts that run `taskman` via Bash
+
+Same operations available either way. MCP preferred when available (typed params, structured errors), skills as fallback.
 
 ## What Agents Use Directly vs MCP
 
@@ -160,79 +191,96 @@ jj git push                         # push only
 - `history_batch(file, start, end)` - fetch multiple file versions
 - `history_search(pattern, file, mode)` - search with added/removed modes
 
+## Code Architecture
+
+```
+taskman/
+├── core.py      # Core logic (describe, sync, history_*)
+├── jj.py        # jj command utilities
+├── server.py    # MCP server (imports core)
+└── cli.py       # CLI (imports core)
+
+~/.claude/commands/
+├── describe.md      # Skill: runs `taskman describe`
+├── sync.md          # Skill: runs `taskman sync`
+├── history-diffs.md # Skill: runs `taskman history-diffs`
+└── ...
+```
+
+```
+┌─────────────────┐     ┌─────────────┐
+│   MCP server    │     │    CLI      │
+│   (in-process)  │     │ (subprocess)│
+└────────┬────────┘     └──────┬──────┘
+         │ import              │ import
+         └──────────┬──────────┘
+                    ▼
+              taskman/core.py
+                    │
+                    ▼
+              taskman/jj.py
+                    │
+                    ▼
+               jj commands
+                    ↑
+            Skills (bash) ─── taskman CLI
+```
+
+MCP imports core directly (no subprocess overhead). Skills call CLI via bash.
+
 ## MCP API
 
+Thin wrappers around core functions:
+
 ```python
+from taskman import core
+
 @mcp.tool()
 async def describe(reason: str) -> str:
-    """Create named checkpoint.
-
-    Ensures working copy is snapshotted, then describes current commit.
-    Everything since last describe() is one logical unit.
-
-    Args:
-        reason: Description of current state
-
-    Returns: Revision ID
-    """
+    """Create named checkpoint."""
+    return await core.describe(reason)
 
 @mcp.tool()
 async def sync(reason: str) -> str:
-    """Full sync: describe, fetch, rebase, push.
-
-    Args:
-        reason: Description of changes being synced
-
-    Returns: Status (success, conflicts to resolve, or error)
-
-    If conflicts, returns markers. Agent resolves with Edit, calls sync() again.
-    """
+    """Full sync: describe, fetch, rebase, push."""
+    return await core.sync(reason)
 
 @mcp.tool()
 async def history_diffs(file: str, start_rev: str, end_rev: str = "@") -> str:
-    """Get all diffs for file across revision range.
-
-    Aggregates diffs from multiple revisions in one call.
-
-    Args:
-        file: Relative path
-        start_rev: Older revision
-        end_rev: Newer revision (default: @)
-
-    Returns: Concatenated diffs with revision headers
-    """
+    """Get all diffs for file across revision range."""
+    return await core.history_diffs(file, start_rev, end_rev)
 
 @mcp.tool()
 async def history_batch(file: str, start_rev: str, end_rev: str = "@") -> str:
-    """Fetch file content at all revisions in range.
-
-    Returns multiple versions in one call for efficient history search.
-
-    Args:
-        file: Relative path
-        start_rev: Older revision
-        end_rev: Newer revision (default: @)
-
-    Returns: All versions concatenated with revision headers
-    """
+    """Fetch file content at all revisions in range."""
+    return await core.history_batch(file, start_rev, end_rev)
 
 @mcp.tool()
 async def history_search(
-    pattern: str,
-    file: str = None,
-    mode: str = "contains",
-    limit: int = 20
+    pattern: str, file: str = None, mode: str = "contains", limit: int = 20
 ) -> str:
-    """Search history for pattern.
+    """Search history for pattern."""
+    return await core.history_search(pattern, file, mode, limit)
+```
 
-    Args:
-        pattern: Regex to search
-        file: Specific file, or None for all
-        mode: "contains" | "added" | "removed"
-        limit: Max results
+## Skills
 
-    Returns: Matching revisions with context
-    """
+Skill files call CLI (which imports core):
+
+**describe.md:**
+```markdown
+Run: taskman describe "$ARGUMENTS"
+```
+
+**sync.md:**
+```markdown
+Run: taskman sync "$ARGUMENTS"
+If conflicts, resolve with Edit, then run again.
+```
+
+**history-diffs.md / history-batch.md / history-search.md:**
+```markdown
+Run: taskman <command> $ARGUMENTS
 ```
 
 ## Sync Protocol
