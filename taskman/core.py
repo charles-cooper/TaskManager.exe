@@ -372,12 +372,12 @@ def install_mcp(agent: str) -> str:
 
 
 def install_skills() -> str:
-    """Copy skill files to ~/.claude/commands/"""
+    """Copy skill files to ~/.claude/skills/"""
     skills_dir = Path(__file__).resolve().parent.parent / "skills"
     if not skills_dir.is_dir():
         raise FileNotFoundError(f"skills directory not found: {skills_dir}")
 
-    dest_dir = Path.home() / ".claude" / "commands"
+    dest_dir = Path.home() / ".claude" / "skills"
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     count = 0
