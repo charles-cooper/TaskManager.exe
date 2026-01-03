@@ -15,12 +15,15 @@ A version-controlled task management system for AI agents. Agents use familiar f
 │              ┌────────────┴────────────┐                        │
 │              ▼                         ▼                        │
 │         Edit tool                 MCP Server                    │
-│         (file ops)                (history/sync)                │
+│         (file ops)                (batch/sync ops)              │
+│              │                         │                        │
+│              ▼                         ▼                        │
+│         raw jj commands           compound workflows            │
 │              │                         │                        │
 │              └────────────┬────────────┘                        │
 │                           ▼                                      │
 │                    .agent-files/                                │
-│                    (jj + git colocate)                          │
+│                       (jj repo)                                 │
 │                           │                                      │
 │                      push/pull                                  │
 │                           ▼                                      │
@@ -31,39 +34,39 @@ A version-controlled task management system for AI agents. Agents use familiar f
 
 **Components:**
 
-1. **Agent**: Uses Edit tool for file modifications, MCP tools for history/sync
-2. **MCP Server**: FastMCP, in-process, stdio. Wraps jj commands.
-3. **.agent-files/**: Working clone (jj + git colocate)
-4. **.agent-files.git/**: Bare origin at repo root for worktree sync
+1. **Agent**: Uses Edit tool for files, raw jj for simple ops, MCP for batch/compound ops
+2. **MCP Server**: FastMCP, in-process, stdio. Only for things that need scripting.
+3. **.agent-files/**: jj repo (can be colocated or non-colocated with git)
+4. **.agent-files.git/**: Bare git origin for worktree sync
+
+**Why clones instead of jj workspaces?**
+
+jj workspaces share a commit graph immediately (no push/pull). But:
+- No natural "source of truth" - all workspaces are peers
+- Race conditions when multiple agents sync simultaneously
+- Bare origin provides serialization: first push wins, second must pull first
+- Explicit sync boundaries via push/pull match our session model
 
 ## Repo Structure
 
-**Single repo (no worktrees):**
 ```
 repo/
-├── .agent-files.git/          # bare origin
-├── .agent-files/              # working clone
+├── .agent-files.git/          # bare origin (shared across worktrees)
+├── .agent-files/              # jj clone
+│   ├── .jj/                   # jj internals (includes git at .jj/repo/store/git)
 │   ├── STATUS.md
 │   ├── LONGTERM_MEM.md
 │   ├── MEDIUMTERM_MEM.md
 │   └── tasks/
 │       ├── TASK_<slug>.md
 │       └── _archive/
-└── <project files>
+├── worktree-a/.agent-files/   # another jj clone
+└── worktree-b/.agent-files/   # another jj clone
 ```
 
-**With worktrees:**
-```
-repo/
-├── .agent-files.git/          # bare origin (shared)
-├── .agent-files/              # clone for root
-├── worktree-a/
-│   └── .agent-files/          # clone
-└── worktree-b/
-    └── .agent-files/          # clone
-```
+All clones push/pull to `.agent-files.git/`.
 
-All clones push/pull to `.agent-files.git/`. Symmetric model - no special cases.
+**Colocate vs non-colocate:** Either works. Non-colocated repos store git internally at `.jj/repo/store/git`. Push/pull works identically. Colocate only needed if you want git tools to work directly.
 
 ## Task File Format
 
@@ -74,10 +77,10 @@ All clones push/pull to `.agent-files.git/`. Symmetric model - no special cases.
 Status: planned|in_progress|blocked|complete
 Priority: P0|P1|P2
 Created: YYYY-MM-DD
-Completed: YYYY-MM-DD (when done)
+Completed: YYYY-MM-DD
 
 ## Problem
-<what, why, user impact>
+<what, why>
 
 ## Design
 <decisions, alternatives rejected>
@@ -87,43 +90,35 @@ Completed: YYYY-MM-DD (when done)
 - [x] completed item
 
 ## Attempts
-<!-- append-only, raw log of what was tried -->
+<!-- append-only, raw log -->
 ### Attempt 1 (YYYY-MM-DD HH:MM)
 Approach: ...
 Result: ...
 
 ## Summary
-<!-- distilled on handoff, rewritten to stay lean -->
+<!-- distilled on handoff, kept lean -->
 Current state: ...
 Key learnings: ...
 Next steps: ...
 
 ## Notes
-<gotchas, breadcrumbs, file references>
+<breadcrumbs, file:line references>
 ```
-
-**Attempts vs Summary:**
-- **Attempts**: Raw, append-only. Agent logs what they try as they go.
-- **Summary**: Distilled on handoff. Compressed learnings, kept lean.
-
-Agent writes both. Version history is safety net for bad distillation.
 
 ## Versioning Model
 
-**jj with git colocate:**
-- jj for working copy model (auto-snapshot)
-- git for push/pull to bare origin
-- `--colocate` means jj and git share .git directory
+**jj configuration:**
+```toml
+[ui]
+conflict-marker-style = "git"
+```
 
-**Auto-snapshot behavior:**
-- jj snapshots working copy on any jj command
-- No explicit trigger needed
-- Agent edits files → next MCP call triggers snapshot as side effect
+**Auto-snapshot:** jj snapshots working copy at start of any jj command. No explicit trigger needed.
 
-**Named commits:**
-- `describe(reason)` creates named checkpoint
-- Everything between describe() calls is one logical unit (implicit batching)
-- No explicit "atomic batch" API needed
+**Revision syntax:**
+- `@` = working copy commit
+- `@-` = parent, `@--` = grandparent
+- `bookmark..@` = range from bookmark to working copy
 
 ## Sync Model
 
@@ -133,114 +128,47 @@ Agent writes both. Version history is safety net for bad distillation.
 - `/handoff`: push
 - Task complete: push
 
-Mid-session work is local only. Conflicts are rare (different agents on different tasks).
-
-**Last handoff tracking:**
-- Agent records in STATUS.md: `Last handoff: <timestamp> (rev <id>)`
-- No jj bookmarks or magic files needed
-- `/continue` reads STATUS.md to find what changed since
+**Last handoff tracking:** Agent records in STATUS.md: `Last handoff: <timestamp> (rev <id>)`
 
 ## CLI (taskman)
 
 ```bash
 taskman init                  # create .agent-files.git/ (bare) + .agent-files/ (clone)
 taskman wt                    # in worktree: clone from root's .agent-files.git/
-
-taskman install claude        # install MCP config for Claude Code
-taskman install cursor        # install for Cursor
-taskman install codex         # install globally (codex doesn't support per-project)
-taskman install <agent>       # etc.
+taskman install <agent>       # install MCP config for agent (claude, cursor, codex, etc.)
 ```
 
-**MCP server installation:**
-- Per-project by default (in-process server)
-- Global install for agents that don't support per-project (e.g., codex)
+## What Agents Use Directly vs MCP
+
+**Use jj directly (no wrapper needed):**
+```bash
+jj status                           # see current state
+jj log                              # view history
+jj log -r 'bookmark..@'             # changes since bookmark
+jj restore --from <rev> <file>      # restore file
+jj op log                           # operation history
+jj op restore <id>                  # restore to operation
+jj diff                             # see changes
+jj git fetch                        # fetch only
+jj git push                         # push only
+```
+
+**Use MCP tools (need scripting/batching):**
+- `describe(reason)` - important checkpoint, ensures snapshot first
+- `sync(reason)` - compound: describe + fetch + rebase + push + conflict check
+- `history_diffs(file, start, end)` - aggregate diffs across range
+- `history_batch(file, start, end)` - fetch multiple file versions
+- `history_search(pattern, file, mode)` - search with added/removed modes
 
 ## MCP API
-
-### History Queries
-
-```python
-@mcp.tool()
-async def history_log(file: str = None, limit: int = 50) -> str:
-    """Get commit log summary for navigation.
-
-    Args:
-        file: Relative path, or None for all files
-        limit: Max revisions to show
-
-    Returns: List of revisions with timestamps, messages, files changed.
-    """
-
-@mcp.tool()
-async def history_batch(file: str, start_rev: str, end_rev: str = "@") -> str:
-    """Fetch file content at all revisions in range.
-
-    Args:
-        file: Relative path
-        start_rev: Older revision
-        end_rev: Newer revision (default: current)
-
-    Returns: All versions in range, concatenated with revision headers.
-    Efficient for agent to search through many versions in one call.
-    """
-
-@mcp.tool()
-async def history_diffs(file: str, start_rev: str, end_rev: str = "@") -> str:
-    """Get diffs for a file across revision range.
-
-    Args:
-        file: Relative path
-        start_rev: Older revision
-        end_rev: Newer revision (default: current)
-
-    Returns: Concatenated diffs with revision headers.
-    More compact than full versions for tracing changes.
-    """
-
-@mcp.tool()
-async def history_search(
-    pattern: str,
-    file: str = None,
-    mode: str = "contains",
-    limit: int = 20
-) -> str:
-    """Search history for pattern (regex).
-
-    Args:
-        pattern: Regex to search for
-        file: Specific file, or None for all files
-        mode: "contains" | "added" | "removed"
-        limit: Max results
-
-    Returns: Matching revisions with context snippets
-    """
-
-@mcp.tool()
-async def history_restore(file: str, rev: str) -> str:
-    """Restore file to previous revision.
-
-    Args:
-        file: Relative path
-        rev: jj revision spec
-
-    Returns: Confirmation with new content preview
-    """
-
-# TABLED: history_at(file, revisions: list[str])
-# Agent can use jj/git show directly for single file at specific revision.
-# MCP value is batching; single fetches don't need wrapper.
-```
-
-### Versioning Operations
 
 ```python
 @mcp.tool()
 async def describe(reason: str) -> str:
-    """Create named checkpoint with description.
+    """Create named checkpoint.
 
-    Call to mark meaningful state. Everything since last describe()
-    is grouped as one logical unit.
+    Ensures working copy is snapshotted, then describes current commit.
+    Everything since last describe() is one logical unit.
 
     Args:
         reason: Description of current state
@@ -250,129 +178,109 @@ async def describe(reason: str) -> str:
 
 @mcp.tool()
 async def sync(reason: str) -> str:
-    """Describe, pull, resolve conflicts, push.
+    """Full sync: describe, fetch, rebase, push.
 
     Args:
         reason: Description of changes being synced
 
-    Returns: Sync status (success, conflicts to resolve, or error)
+    Returns: Status (success, conflicts to resolve, or error)
 
-    If conflicts exist, returns conflict markers for agent to resolve.
-    Agent edits files to resolve, then calls sync() again.
-    """
-```
-
-### Handoff Operations
-
-```python
-@mcp.tool()
-async def handoff_detailed(task: str) -> str:
-    """Prepare detailed handoff for mid-task context switch.
-
-    Use when stopping mid-task. Agent should populate:
-    - Attempts section: what was tried, what failed
-    - Summary section: current state, key learnings, next steps
-    - Notes section: breadcrumbs (file:line references)
-
-    System provides recent change summary to help agent write handoff.
-
-    Args:
-        task: Task slug (e.g., "foo" for TASK_foo.md)
-
-    Returns: Handoff checklist and recent activity summary
+    If conflicts, returns markers. Agent resolves with Edit, calls sync() again.
     """
 
 @mcp.tool()
-async def handoff_next_task(completed_task: str, next_task: str) -> str:
-    """Brief handoff after task completion.
+async def history_diffs(file: str, start_rev: str, end_rev: str = "@") -> str:
+    """Get all diffs for file across revision range.
 
-    Use when task is done. Keeps context minimal.
+    Aggregates diffs from multiple revisions in one call.
 
     Args:
-        completed_task: Task just finished
-        next_task: Task to work on next
+        file: Relative path
+        start_rev: Older revision
+        end_rev: Newer revision (default: @)
 
-    Returns: Confirmation
+    Returns: Concatenated diffs with revision headers
+    """
+
+@mcp.tool()
+async def history_batch(file: str, start_rev: str, end_rev: str = "@") -> str:
+    """Fetch file content at all revisions in range.
+
+    Returns multiple versions in one call for efficient history search.
+
+    Args:
+        file: Relative path
+        start_rev: Older revision
+        end_rev: Newer revision (default: @)
+
+    Returns: All versions concatenated with revision headers
+    """
+
+@mcp.tool()
+async def history_search(
+    pattern: str,
+    file: str = None,
+    mode: str = "contains",
+    limit: int = 20
+) -> str:
+    """Search history for pattern.
+
+    Args:
+        pattern: Regex to search
+        file: Specific file, or None for all
+        mode: "contains" | "added" | "removed"
+        limit: Max results
+
+    Returns: Matching revisions with context
     """
 ```
 
 ## Sync Protocol
 
-### Pull (session start, /continue)
-
+**sync() implementation:**
 ```
-1. jj git fetch
-2. jj rebase -d main@origin
-3. If conflicts:
-   - Leave conflict markers in files
-   - Return list of conflicted files
-   - Agent resolves with Edit
-   - Agent calls sync() to retry
-```
-
-### Push (/handoff, task complete)
-
-```
-1. jj describe -m "<reason>"
-2. jj git push
-3. If rejected (remote ahead):
-   - Pull first
-   - Retry push
+1. jj describe -m "<reason>"     # snapshot + describe
+2. jj git fetch                  # get remote changes
+3. jj rebase -d main@origin      # rebase onto remote
+4. check jj status for conflicts
+   - if conflicts: return conflict info, agent resolves, calls sync() again
+5. jj git push                   # push to origin
+   - if rejected: return error (remote changed, need to sync again)
 ```
 
 ## Conflict Resolution
 
-jj conflict markers in files:
+With `ui.conflict-marker-style = "git"`:
 
 ```
-<<<<<<<
+<<<<<<< side A
 local changes
-%%%%%%%
+||||||| base
+original content
 =======
 remote changes
->>>>>>>
+>>>>>>> side B
 ```
 
-Agent sees on next file read, resolves with Edit, calls `sync()` to complete.
+Agent resolves with Edit, calls `sync()` to complete.
 
 ## Handoff Types
 
-### handoff_detailed (mid-task)
+**handoff_detailed (mid-task):** Comprehensive to avoid repeating mistakes.
+- Attempts: what was tried, what failed
+- Summary: current state, learnings, next steps
+- Notes: breadcrumbs (file:line references)
 
-For stopping mid-task. Comprehensive to avoid next session repeating mistakes.
+**handoff_next_task (task complete):** Brief pointer to next task.
 
-Agent populates:
-- **Attempts**: What was tried, what failed, why
-- **Summary**: Current state, key learnings, recommended next steps
-- **Notes**: Breadcrumbs (file:line references, relevant commits)
-
-**Breadcrumbs principle:** Include enough context to reconstruct, not everything. References with short summaries, not full content.
-
-### handoff_next_task (task complete)
-
-For moving to next task. Brief to avoid memory bloat.
-
-- Mark current task complete
-- Update STATUS.md with next task
-- Minimal context (next task file has what's needed)
-
-## Context Injection on /continue
-
-When agent runs `/continue`:
-
-1. Pull latest from origin
-2. Read STATUS.md to find current task and last handoff timestamp
-3. Auto-inject into prompt:
-   - Task file content (including Summary section)
-   - Changes since last handoff (from jj log)
-   - Any unresolved conflicts
-4. Agent has full context to resume
+**Breadcrumbs principle:** Include enough to reconstruct, not everything.
 
 ## Error Handling
 
-Bubble up jj errors to agent. No complex error handling - agent decides how to proceed.
+Bubble up jj errors to agent. No complex handling - agent decides.
 
-## Open Questions
+## jj Gotchas
 
-- Exact jj revision syntax for API (@ vs HEAD vs commit IDs) - need to verify jj docs
-- MCP server config file format for different agents
+1. **Stale working copy**: If operation interrupted, fix with `jj workspace update-stale`
+2. **Conflicted commits in git**: Appear as `.jjconflict-*/` directories
+3. **Change IDs**: Stored in non-standard git headers, may not survive pure-git ops
