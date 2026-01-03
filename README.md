@@ -46,14 +46,16 @@ Agent
   ├── Edit tool ────────► .agent-files/ (jj repo)
   │   (file ops)                │
   │                        push/pull
-  └── MCP Server ───────────────┼──────────────────►
-      (batch/sync)              ▼
-                        .agent-files.git/ (bare origin)
+  ├── MCP Server ───────────────┼──────────────────►
+  │   (batch/sync)              ▼
+  │                     .agent-files.git/ (bare origin)
+  └── Skills ───────────────────┘
+      (CLI wrapper)
 ```
 
 - Agents edit files with their normal Edit tool
 - jj auto-snapshots every change (no explicit commit needed)
-- MCP tools handle sync and history queries
+- MCP tools or Skills handle sync and history queries
 - Bare git origin serializes concurrent access across worktrees
 
 ## CLI Commands
@@ -77,7 +79,7 @@ taskman stdio                   # run MCP server (stdio transport)
 
 ## MCP Tools
 
-When installed, these tools are available to agents:
+When installed via `taskman install-mcp`, these tools are available:
 
 | Tool | Description |
 |------|-------------|
@@ -86,6 +88,23 @@ When installed, these tools are available to agents:
 | `history_diffs(file, start, end)` | Aggregate diffs across range |
 | `history_batch(file, start, end)` | File content at all revisions |
 | `history_search(pattern, file, limit)` | Search history for pattern |
+
+## Skills
+
+When installed via `taskman install-skills`, these Claude Code skills are available:
+
+| Skill | Description |
+|-------|-------------|
+| `/continue` | Resume work - pull + read STATUS.md |
+| `/handoff` | Mid-task handoff - sync + detailed context |
+| `/complete` | Task done - sync + archive |
+| `/describe <reason>` | Create named checkpoint |
+| `/sync <reason>` | Full sync workflow |
+| `/history-diffs <file> <start> [end]` | Diffs across range |
+| `/history-batch <file> <start> [end]` | File content at revisions |
+| `/history-search <pattern> [--file] [--limit]` | Search history |
+
+Skills wrap the CLI and work without MCP support.
 
 ## Direct jj Commands
 
@@ -113,12 +132,11 @@ jj restore --from <rev> <file>  # restore file from revision
 ## Sync Model
 
 Sync at task boundaries:
-- Session start: pull
-- `/continue`: pull
-- `/handoff`: push
-- Task complete: push
+- `/continue` - session start, pull latest state
+- `/handoff` - mid-task, push with detailed context
+- `/complete` - task done, push and archive
 
-On conflict, agent resolves with Edit tool, then calls sync again.
+On conflict, agent resolves with Edit tool, then syncs again.
 
 ## License
 
