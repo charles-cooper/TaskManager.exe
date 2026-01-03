@@ -189,7 +189,7 @@ jj git push                         # push only
 - `sync(reason)` - compound: describe + fetch + rebase + push + conflict check
 - `history_diffs(file, start, end)` - aggregate diffs across range
 - `history_batch(file, start, end)` - fetch multiple file versions
-- `history_search(pattern, file, mode)` - search with added/removed modes
+- `history_search(pattern, file, limit)` - search using jj's `diff_contains()` revset
 
 ## Code Architecture
 
@@ -230,37 +230,38 @@ MCP imports core directly (no subprocess overhead). Skills call CLI via bash.
 
 ## MCP API
 
-Thin wrappers around core functions:
+Thin wrappers around sync core functions. FastMCP handles exceptions as tool errors automatically.
 
 ```python
+from mcp.server.fastmcp import FastMCP
 from taskman import core
 
+mcp = FastMCP("taskman")
+
 @mcp.tool()
-async def describe(reason: str) -> str:
+def describe(reason: str) -> str:
     """Create named checkpoint."""
-    return await core.describe(reason)
+    return core.describe(reason)
 
 @mcp.tool()
-async def sync(reason: str) -> str:
+def sync(reason: str) -> str:
     """Full sync: describe, fetch, rebase, push."""
-    return await core.sync(reason)
+    return core.sync(reason)
 
 @mcp.tool()
-async def history_diffs(file: str, start_rev: str, end_rev: str = "@") -> str:
+def history_diffs(file: str, start_rev: str, end_rev: str = "@") -> str:
     """Get all diffs for file across revision range."""
-    return await core.history_diffs(file, start_rev, end_rev)
+    return core.history_diffs(file, start_rev, end_rev)
 
 @mcp.tool()
-async def history_batch(file: str, start_rev: str, end_rev: str = "@") -> str:
+def history_batch(file: str, start_rev: str, end_rev: str = "@") -> str:
     """Fetch file content at all revisions in range."""
-    return await core.history_batch(file, start_rev, end_rev)
+    return core.history_batch(file, start_rev, end_rev)
 
 @mcp.tool()
-async def history_search(
-    pattern: str, file: str = None, mode: str = "contains", limit: int = 20
-) -> str:
-    """Search history for pattern."""
-    return await core.history_search(pattern, file, mode, limit)
+def history_search(pattern: str, file: str = None, limit: int = 20) -> str:
+    """Search history for pattern in diffs."""
+    return core.history_search(pattern, file, limit)
 ```
 
 ## Skills
@@ -332,3 +333,37 @@ Bubble up jj errors to agent. No complex handling - agent decides.
 1. **Stale working copy**: If operation interrupted, fix with `jj workspace update-stale`
 2. **Conflicted commits in git**: Appear as `.jjconflict-*/` directories
 3. **Change IDs**: Stored in non-standard git headers, may not survive pure-git ops
+
+## MCP Configuration Locations
+
+**Claude Code:**
+- Global: `~/.claude.json`
+- Project: `.mcp.json`
+- Format: JSON with `mcpServers` key
+
+```json
+{
+  "mcpServers": {
+    "taskman": {
+      "type": "stdio",
+      "command": "taskman",
+      "args": ["serve"]
+    }
+  }
+}
+```
+
+**Cursor:**
+- Global: `~/.cursor/mcp.json`
+- Project: `.cursor/mcp.json`
+- Format: JSON with `mcpServers` key (same structure as Claude)
+
+**Codex:**
+- Global: `~/.codex/config.toml`
+- Format: TOML with `mcp_servers` key (underscore, not hyphen)
+
+```toml
+[mcp_servers.taskman]
+command = "taskman"
+args = ["serve"]
+```
