@@ -45,3 +45,5 @@ htmlcov/
 # OS
 .DS_Store
 Thumbs.db
+.agent-files/
+.agent-files.git/
