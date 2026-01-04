@@ -18,7 +18,8 @@ def main() -> None:
     subparsers.add_parser("stdio")
 
     wt_parser = subparsers.add_parser("wt")
-    wt_parser.add_argument("name", help="worktree name (created under worktrees/<name>/)")
+    wt_parser.add_argument("name", nargs="?", default=None,
+                           help="worktree name (omit to just clone .agent-files in current dir)")
 
     # Operation commands
     desc = subparsers.add_parser("describe")

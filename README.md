@@ -33,9 +33,14 @@ taskman install-mcp claude    # or: cursor, codex
 taskman install-skills
 ```
 
-To create a worktree with its own `.agent-files/`:
+To create a worktree (from main repo):
 ```bash
-taskman wt my-feature    # creates worktrees/my-feature/ with git worktree + jj clone
+taskman wt my-feature    # creates worktrees/my-feature/ + clones .agent-files
+```
+
+To add .agent-files to an existing worktree (recovery):
+```bash
+taskman wt               # clones .agent-files into current directory
 ```
 
 ## How It Works
@@ -62,7 +67,8 @@ Agent
 
 ```bash
 taskman init                    # create .agent-files.git/ + .agent-files/
-taskman wt <name>               # create worktrees/<name>/ with git worktree + jj clone
+taskman wt <name>               # create worktree (from main repo)
+taskman wt                      # add .agent-files to existing worktree
 taskman install-mcp <agent>     # install MCP config (claude, cursor, codex)
 taskman install-skills          # install skill files to ~/.claude/commands/
 taskman uninstall-mcp <agent>   # remove MCP config

@@ -247,28 +247,43 @@ def _find_agent_files_git_dir(start: Path | None = None) -> Path:
     raise FileNotFoundError(".agent-files.git directory not found")
 
 
-def wt(name: str) -> str:
-    """Create git worktree and clone .agent-files
+def wt(name: str | None = None) -> str:
+    """Create git worktree and/or clone .agent-files
 
-    1. Find root repo's .agent-files.git/ (search upward)
-    2. Create worktrees/<name>/ via git worktree add
-    3. jj git clone {root}/.agent-files.git worktrees/<name>/.agent-files
+    If name is provided (from main repo):
+        1. Create worktrees/<name>/ via git worktree add
+        2. Clone .agent-files into worktrees/<name>/
+
+    If name is None (recovery for existing worktree):
+        1. Clone .agent-files into current directory
     """
     cwd = Path.cwd()
-    worktree_dir = cwd / "worktrees" / name
-    if worktree_dir.exists():
-        raise FileExistsError(f"worktrees/{name} already exists")
-
     origin = _find_agent_files_git_dir(cwd)
+    in_main_repo = (cwd / ".agent-files.git").exists()
 
-    # Create git worktree
-    _run_cmd_check(["git", "worktree", "add", str(worktree_dir)], cwd=cwd)
+    if name:
+        if not in_main_repo:
+            raise ValueError(
+                f"Run 'taskman wt {name}' from main repo ({origin.parent})"
+            )
+        worktree_dir = cwd / "worktrees" / name
+        if worktree_dir.exists():
+            raise FileExistsError(f"worktrees/{name} already exists")
 
-    # Clone .agent-files into the worktree
-    clone = worktree_dir / ".agent-files"
-    run_jj(["git", "clone", str(origin), str(clone)], worktree_dir)
+        _run_cmd_check(["git", "worktree", "add", str(worktree_dir)], cwd=cwd)
 
-    return f"Created worktree at worktrees/{name}/ with .agent-files cloned from {origin}"
+        clone = worktree_dir / ".agent-files"
+        run_jj(["git", "clone", str(origin), str(clone)], worktree_dir)
+
+        return f"Created worktree at worktrees/{name}/"
+    else:
+        if in_main_repo:
+            raise ValueError("Use 'taskman wt <name>' to create a worktree")
+        clone = cwd / ".agent-files"
+        if clone.exists():
+            raise FileExistsError(".agent-files already exists")
+        run_jj(["git", "clone", str(origin), str(clone)], cwd)
+        return f"Cloned .agent-files from {origin}"
 
 
 def _load_json(path: Path) -> dict:
