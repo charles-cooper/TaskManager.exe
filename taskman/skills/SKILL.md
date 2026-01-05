@@ -44,3 +44,7 @@ Version-controlled agent memory and task management. The `.agent-files/` directo
 | /history-batch | Fetching file content at revisions |
 
 When a command is invoked, read the corresponding `.md` file in this skill directory for detailed instructions.
+
+## Important
+
+`.agent-files/` should never be committed. Add it to `.gitignore`.
