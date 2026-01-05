@@ -159,12 +159,19 @@ def sync(reason: str) -> str:
         run_jj(push_cmd, cwd)
         steps.append("git push: ok")
     except RuntimeError as exc:
-        err_msg = str(exc).lower()
-        if "rejected" in err_msg or "non-fast-forward" in err_msg:
-            steps.append("git push: REJECTED (remote changed)")
+        err_msg = str(exc)
+        steps.append("git push: FAILED")
+        # Extract useful info from jj error
+        if "no author" in err_msg.lower() or "no committer" in err_msg.lower():
+            steps.append("Error: commit has no author/committer set")
+            steps.append("Fix: jj config set --user user.name 'Your Name'")
+            steps.append("     jj config set --user user.email 'you@example.com'")
+        elif "rejected" in err_msg.lower() or "non-fast-forward" in err_msg.lower():
+            steps.append("Error: push rejected (remote changed)")
             steps.append("Recovery: run 'taskman sync' again to rebase and retry")
-            return "\n".join(steps)
-        raise
+        else:
+            steps.append(err_msg)
+        return "\n".join(steps)
 
     return "\n".join(steps)
 
@@ -263,6 +270,10 @@ def init() -> str:
     _run_cmd_check(["git", "init", "--bare", str(bare)], cwd=cwd)
     run_jj(["git", "clone", str(bare), str(clone)], cwd)
 
+    # Set default author for agent commits
+    run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
+    run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
+
     (clone / "tasks").mkdir(parents=True, exist_ok=True)
     for filename in ["STATUS.md", "LONGTERM_MEM.md", "MEDIUMTERM_MEM.md"]:
         path = clone / filename
@@ -318,6 +329,8 @@ def wt(name: str | None = None) -> str:
 
         clone = worktree_dir / ".agent-files"
         run_jj(["git", "clone", str(origin), str(clone)], worktree_dir)
+        run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
+        run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
 
         return f"Created worktree at worktrees/{name}/"
     else:
@@ -327,6 +340,8 @@ def wt(name: str | None = None) -> str:
         if clone.exists():
             raise FileExistsError(".agent-files already exists")
         run_jj(["git", "clone", str(origin), str(clone)], cwd)
+        run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
+        run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
         return f"Cloned .agent-files from {origin}"
 
 
