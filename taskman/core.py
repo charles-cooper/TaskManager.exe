@@ -411,12 +411,12 @@ def install_mcp(agent: str) -> str:
 
 
 def install_skills() -> str:
-    """Copy skill files to ~/.claude/skills/"""
+    """Copy skill files to ~/.claude/skills/taskman/"""
     skills_dir = Path(__file__).resolve().parent / "skills"
     if not skills_dir.is_dir():
         raise FileNotFoundError(f"skills directory not found: {skills_dir}")
 
-    dest_dir = Path.home() / ".claude" / "skills"
+    dest_dir = Path.home() / ".claude" / "skills" / "taskman"
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     count = 0
@@ -484,20 +484,18 @@ def uninstall_mcp(agent: str) -> str:
 
 
 def uninstall_skills() -> str:
-    """Remove taskman skill files from ~/.claude/skills/"""
-    skills_dir = Path(__file__).resolve().parent / "skills"
-    if not skills_dir.is_dir():
-        raise FileNotFoundError(f"skills directory not found: {skills_dir}")
-
-    dest_dir = Path.home() / ".claude" / "skills"
+    """Remove taskman skill files from ~/.claude/skills/taskman/"""
+    dest_dir = Path.home() / ".claude" / "skills" / "taskman"
     if not dest_dir.is_dir():
         return f"No skills directory found at {dest_dir}"
 
     count = 0
-    for path in skills_dir.glob("*.md"):
-        dest_path = dest_dir / path.name
-        if dest_path.exists():
-            dest_path.unlink()
-            count += 1
+    for path in dest_dir.glob("*.md"):
+        path.unlink()
+        count += 1
+
+    # Remove the taskman directory if empty
+    if dest_dir.is_dir() and not any(dest_dir.iterdir()):
+        dest_dir.rmdir()
 
     return f"Removed {count} skills from {dest_dir}"
