@@ -412,7 +412,7 @@ def install_mcp(agent: str) -> str:
 
 def install_skills() -> str:
     """Copy skill files to ~/.claude/skills/"""
-    skills_dir = Path(__file__).resolve().parent.parent / "skills"
+    skills_dir = Path(__file__).resolve().parent / "skills"
     if not skills_dir.is_dir():
         raise FileNotFoundError(f"skills directory not found: {skills_dir}")
 
@@ -485,7 +485,7 @@ def uninstall_mcp(agent: str) -> str:
 
 def uninstall_skills() -> str:
     """Remove taskman skill files from ~/.claude/skills/"""
-    skills_dir = Path(__file__).resolve().parent.parent / "skills"
+    skills_dir = Path(__file__).resolve().parent / "skills"
     if not skills_dir.is_dir():
         raise FileNotFoundError(f"skills directory not found: {skills_dir}")
 
