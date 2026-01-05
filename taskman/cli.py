@@ -11,10 +11,12 @@ def main() -> None:
     subparsers.add_parser("init")
     install_mcp = subparsers.add_parser("install-mcp")
     install_mcp.add_argument("agent", choices=["claude", "cursor", "codex"])
-    subparsers.add_parser("install-skills")
+    install_skills = subparsers.add_parser("install-skills")
+    install_skills.add_argument("agent", choices=["claude", "codex"])
     uninstall_mcp = subparsers.add_parser("uninstall-mcp")
     uninstall_mcp.add_argument("agent", choices=["claude", "cursor", "codex"])
-    subparsers.add_parser("uninstall-skills")
+    uninstall_skills = subparsers.add_parser("uninstall-skills")
+    uninstall_skills.add_argument("agent", choices=["claude", "codex"])
     subparsers.add_parser("stdio")
 
     wt_parser = subparsers.add_parser("wt")
@@ -52,11 +54,11 @@ def main() -> None:
     elif args.command == "install-mcp":
         print(core.install_mcp(args.agent))
     elif args.command == "install-skills":
-        print(core.install_skills())
+        print(core.install_skills(args.agent))
     elif args.command == "uninstall-mcp":
         print(core.uninstall_mcp(args.agent))
     elif args.command == "uninstall-skills":
-        print(core.uninstall_skills())
+        print(core.uninstall_skills(args.agent))
     elif args.command == "stdio":
         from taskman.server import main as server_main
 

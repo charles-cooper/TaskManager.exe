@@ -410,13 +410,20 @@ def install_mcp(agent: str) -> str:
     raise ValueError(f"Unknown agent: {agent}")
 
 
-def install_skills() -> str:
-    """Copy skill files to ~/.claude/skills/taskman/"""
+def install_skills(agent: str) -> str:
+    """Copy skill files to agent's skills directory."""
     skills_dir = Path(__file__).resolve().parent / "skills"
     if not skills_dir.is_dir():
         raise FileNotFoundError(f"skills directory not found: {skills_dir}")
 
-    dest_dir = Path.home() / ".claude" / "skills" / "taskman"
+    home = Path.home()
+    if agent == "claude":
+        dest_dir = home / ".claude" / "skills" / "taskman"
+    elif agent == "codex":
+        dest_dir = home / ".codex" / "skills" / "taskman"
+    else:
+        raise ValueError(f"Unknown agent: {agent}")
+
     dest_dir.mkdir(parents=True, exist_ok=True)
 
     count = 0
@@ -483,9 +490,16 @@ def uninstall_mcp(agent: str) -> str:
     raise ValueError(f"Unknown agent: {agent}")
 
 
-def uninstall_skills() -> str:
-    """Remove taskman skill files from ~/.claude/skills/taskman/"""
-    dest_dir = Path.home() / ".claude" / "skills" / "taskman"
+def uninstall_skills(agent: str) -> str:
+    """Remove taskman skill files from agent's skills directory."""
+    home = Path.home()
+    if agent == "claude":
+        dest_dir = home / ".claude" / "skills" / "taskman"
+    elif agent == "codex":
+        dest_dir = home / ".codex" / "skills" / "taskman"
+    else:
+        raise ValueError(f"Unknown agent: {agent}")
+
     if not dest_dir.is_dir():
         return f"No skills directory found at {dest_dir}"
 
