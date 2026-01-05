@@ -48,6 +48,34 @@ def _has_remote_main(cwd: Path) -> bool:
     return True
 
 
+def _is_main_tracked(cwd: Path) -> bool:
+    """Check if main@origin is tracked (linked to local main)."""
+    _, out, _ = run_jj(["bookmark", "list", "--all"], cwd)
+    # Tracked: "main: xyz abc" with "main@origin" on separate line
+    # Untracked: "main@origin [new] untracked"
+    for line in out.splitlines():
+        if "main@origin" in line and "untracked" in line:
+            return False
+    return True
+
+
+def _setup_main_bookmark(cwd: Path) -> None:
+    """Ensure main bookmark exists, tracks main@origin, and points to @."""
+    # Track main@origin if exists and untracked
+    if _has_remote_main(cwd) and not _is_main_tracked(cwd):
+        run_jj(["bookmark", "track", "main@origin"], cwd)
+
+    # Set main bookmark to current revision (creates if doesn't exist)
+    try:
+        run_jj(["bookmark", "set", "main", "-r", "@"], cwd)
+    except RuntimeError as exc:
+        # If bookmark doesn't exist, create it
+        if "no such bookmark" in str(exc).lower():
+            run_jj(["bookmark", "create", "main", "-r", "@"], cwd)
+        else:
+            raise
+
+
 def _status_has_conflicts(status_out: str) -> bool:
     return bool(re.search(r"(?im)^(conflicts|conflicted)\b", status_out))
 
@@ -122,8 +150,18 @@ def sync(reason: str) -> str:
     if _status_has_conflicts(status_out):
         return "conflicts detected:\n" + status_out
 
-    run_jj(["git", "push"], cwd)
-    steps.append("git push: ok")
+    _setup_main_bookmark(cwd)
+
+    try:
+        run_jj(["git", "push"], cwd)
+        steps.append("git push: ok")
+    except RuntimeError as exc:
+        err_msg = str(exc).lower()
+        if "rejected" in err_msg or "non-fast-forward" in err_msg:
+            steps.append("git push: REJECTED (remote changed)")
+            steps.append("Recovery: run 'taskman sync' again to rebase and retry")
+            return "\n".join(steps)
+        raise
 
     return "\n".join(steps)
 
@@ -167,6 +205,8 @@ def history_batch(file: str, start_rev: str, end_rev: str = "@") -> str:
             _, out, _ = run_jj(["file", "show", "-r", rev, file], cwd)
         except RuntimeError as exc:
             if "no such path" in str(exc).lower():
+                sections.append(f"=== {rev} ===")
+                sections.append("(file does not exist at this revision)")
                 continue
             raise
         sections.append(f"=== {rev} ===")
@@ -226,7 +266,8 @@ def init() -> str:
         path.touch(exist_ok=True)
 
     run_jj(["describe", "-m", "initial setup"], clone)
-    run_jj(["git", "push"], clone)
+    run_jj(["bookmark", "create", "main", "-r", "@"], clone)
+    run_jj(["git", "push", "--all"], clone)
 
     return "Initialized .agent-files.git and .agent-files"
 
