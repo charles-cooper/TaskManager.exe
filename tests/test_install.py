@@ -6,14 +6,14 @@ from taskman import core
 
 def test_install_skills_creates_dir(mock_home):
     """install_skills creates ~/.claude/skills/ if needed"""
-    core.install_skills()
-    assert (mock_home / ".claude" / "skills").is_dir()
+    core.install_skills("claude")
+    assert (mock_home / ".claude" / "skills" / "taskman").is_dir()
 
 
 def test_install_skills_copies_all_files(mock_home):
     """install_skills copies all skill .md files"""
-    result = core.install_skills()
-    skills_dir = mock_home / ".claude" / "skills"
+    result = core.install_skills("claude")
+    skills_dir = mock_home / ".claude" / "skills" / "taskman"
 
     expected = ["describe.md", "sync.md", "history-diffs.md",
                 "history-batch.md", "history-search.md"]
@@ -23,11 +23,11 @@ def test_install_skills_copies_all_files(mock_home):
 
 def test_install_skills_overwrites_existing(mock_home):
     """install_skills overwrites existing skill files"""
-    skills_dir = mock_home / ".claude" / "skills"
+    skills_dir = mock_home / ".claude" / "skills" / "taskman"
     skills_dir.mkdir(parents=True)
     (skills_dir / "describe.md").write_text("old content")
 
-    core.install_skills()
+    core.install_skills("claude")
 
     content = (skills_dir / "describe.md").read_text()
     assert content != "old content"
@@ -102,12 +102,12 @@ def test_install_mcp_unknown_agent_raises():
 def test_uninstall_skills(mock_home):
     """uninstall_skills removes skill files"""
     # First install
-    core.install_skills()
-    skills_dir = mock_home / ".claude" / "skills"
+    core.install_skills("claude")
+    skills_dir = mock_home / ".claude" / "skills" / "taskman"
     assert (skills_dir / "describe.md").exists()
 
     # Then uninstall
-    core.uninstall_skills()
+    core.uninstall_skills("claude")
 
     # Skills should be gone
     assert not (skills_dir / "describe.md").exists()
