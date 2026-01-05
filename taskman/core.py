@@ -140,7 +140,8 @@ def sync(reason: str) -> str:
     run_jj(["git", "fetch"], cwd)
     steps.append("git fetch: ok")
 
-    if _has_remote_main(cwd):
+    has_remote = _has_remote_main(cwd)
+    if has_remote:
         run_jj(["rebase", "-d", "main@origin"], cwd)
         steps.append("rebase: main@origin")
     else:
@@ -153,7 +154,9 @@ def sync(reason: str) -> str:
     _setup_main_bookmark(cwd)
 
     try:
-        run_jj(["git", "push"], cwd)
+        # Use --all for first push (no remote yet), regular push otherwise
+        push_cmd = ["git", "push"] if has_remote else ["git", "push", "--all"]
+        run_jj(push_cmd, cwd)
         steps.append("git push: ok")
     except RuntimeError as exc:
         err_msg = str(exc).lower()
