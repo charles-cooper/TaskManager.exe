@@ -30,6 +30,20 @@ Version-controlled agent memory and task management. The `.agent-files/` directo
 
 **Scratch space**: Store any temporary agent work here - it's version-controlled separately from the main repo.
 
+## Progressive Disclosure
+
+Store breadcrumbs (pointers), not content. Recover on-demand via Read/Bash/WebFetch.
+
+```
+<slug>: <recovery-instruction>
+```
+
+Examples: `auth-flow: src/auth/login.ts:45-80` | `build-status: run `make build`` | `prev-attempt: jj diff -r @--`
+
+Store inline only: decisions, key insights, non-reproducible errors.
+
+See `/handoff` for writing breadcrumbs, `/continue` for expanding them.
+
 ## Commands
 
 | Command | Use when |

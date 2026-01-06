@@ -321,15 +321,27 @@ Agent resolves with Edit, calls `sync()` to complete.
 ## Handoff Types
 
 **`/handoff` (mid-task):** Comprehensive to avoid repeating mistakes.
-- Attempts: what was tried, what failed
+- Attempts: what was tried, what failed (brief)
 - Summary: current state, learnings, next steps
-- Notes: breadcrumbs (file:line references)
+- Notes: breadcrumbs (pointers to recoverable info)
 
 **`/complete` (task done):** Brief, archives the task.
 - Mark task complete, move to _archive/
 - Pointer to next task (if any)
 
-**Breadcrumbs principle:** Include enough to reconstruct, not everything.
+## Progressive Disclosure
+
+**Principle:** Store pointers (breadcrumbs), not content. Recover on-demand.
+
+Memory files should be lean indexes. Full content pollutes context and bloats handoffs. Breadcrumbs tell the next session how to recover information via Read/Bash/WebFetch.
+
+```
+auth-flow: src/auth/login.ts:45-80
+build-status: run `make build`
+prev-attempt: jj diff -r @--
+```
+
+Store inline only what can't be recovered: decisions, key insights, non-reproducible errors.
 
 ## Error Handling
 
