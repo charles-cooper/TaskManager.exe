@@ -3,8 +3,17 @@ import argparse
 from taskman import core
 
 
+def _get_version() -> str:
+    try:
+        from importlib.metadata import version
+        return version("taskmanager-exe")
+    except Exception:
+        return "dev"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="taskman")
+    parser.add_argument("--version", action="version", version=f"%(prog)s {_get_version()}")
     subparsers = parser.add_subparsers(dest="command")
 
     # Setup commands
