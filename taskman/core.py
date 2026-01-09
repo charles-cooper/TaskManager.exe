@@ -302,7 +302,7 @@ def _find_agent_files_git_dir(start: Path | None = None) -> Path:
     raise FileNotFoundError(".agent-files.git directory not found")
 
 
-def wt(name: str | None = None) -> str:
+def wt(name: str | None = None, *, new_branch: bool = False) -> str:
     """Create git worktree and/or clone .agent-files
 
     If name is provided (from main repo):
@@ -311,6 +311,8 @@ def wt(name: str | None = None) -> str:
 
     If name is None (recovery for existing worktree):
         1. Clone .agent-files into current directory
+
+    By default uses existing branch. If new_branch=True, creates new branch.
     """
     cwd = Path.cwd()
     origin = _find_agent_files_git_dir(cwd)
@@ -325,7 +327,10 @@ def wt(name: str | None = None) -> str:
         if worktree_dir.exists():
             raise FileExistsError(f"worktrees/{name} already exists")
 
-        _run_cmd_check(["git", "worktree", "add", str(worktree_dir)], cwd=cwd)
+        cmd = ["git", "worktree", "add", str(worktree_dir)]
+        if not new_branch:
+            cmd.append(name)
+        _run_cmd_check(cmd, cwd=cwd)
 
         clone = worktree_dir / ".agent-files"
         run_jj(["git", "clone", str(origin), str(clone)], worktree_dir)

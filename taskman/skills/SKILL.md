@@ -56,6 +56,7 @@ See `/handoff` for writing breadcrumbs, `/continue` for expanding them.
 | /history-search | Searching history for patterns |
 | /history-diffs | Viewing diffs across revisions |
 | /history-batch | Fetching file content at revisions |
+| /wt | Setting up .agent-files in a git worktree |
 
 When a command is invoked, read the corresponding `.md` file in this skill directory for detailed instructions.
 

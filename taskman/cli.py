@@ -31,6 +31,8 @@ def main() -> None:
     wt_parser = subparsers.add_parser("wt")
     wt_parser.add_argument("name", nargs="?", default=None,
                            help="worktree name (omit to just clone .agent-files in current dir)")
+    wt_parser.add_argument("--new", dest="new_branch", action="store_true",
+                           help="create new branch instead of using existing one")
 
     # Operation commands
     desc = subparsers.add_parser("describe")
@@ -59,7 +61,7 @@ def main() -> None:
     if args.command == "init":
         print(core.init())
     elif args.command == "wt":
-        print(core.wt(args.name))
+        print(core.wt(args.name, new_branch=args.new_branch))
     elif args.command == "install-mcp":
         print(core.install_mcp(args.agent))
     elif args.command == "install-skills":
