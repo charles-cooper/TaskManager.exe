@@ -1,6 +1,6 @@
 ---
 name: taskman
-description: Agent memory and task management. Use this skill when you need to persist context across sessions, track tasks, hand off work, or store temporary agent scratch data. The .agent-files directory is version-controlled scratch space for all agent work.
+description: Agent memory and task management CLI. Use this skill when you need to persist context across sessions, track tasks, hand off work, or store temporary agent scratch data. Provides the `taskman` CLI for init, sync, describe, and history operations.
 ---
 
 # Taskman
