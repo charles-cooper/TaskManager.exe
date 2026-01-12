@@ -60,6 +60,10 @@ See `/handoff` for writing breadcrumbs, `/continue` for expanding them.
 
 When a command is invoked, read the corresponding `.md` file in this skill directory for detailed instructions.
 
+## jj Snapshotting
+
+jj does NOT auto-snapshot on file changes alone. A jj command must be run to trigger a snapshot. Run `jj st` periodically (after edits or batches of edits) to capture history. Without this, intermediate states are lost.
+
 ## Important
 
 `.agent-files/` should never be committed. Add it to `.gitignore`.
