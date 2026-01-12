@@ -26,7 +26,48 @@ Version-controlled agent memory and task management. The `.agent-files/` directo
 
 **MEDIUMTERM_MEM.md**: Reusable patterns and gotchas. NOT session logs.
 
-**Task files**: One per user-facing work unit. Use checklist items for sub-work.
+**Task files**: One per user-facing work unit. Format:
+
+```markdown
+# TASK: <title>
+
+## Meta
+Status: planned|in_progress|blocked|complete
+Priority: P0|P1|P2
+Created: YYYY-MM-DD
+Completed: YYYY-MM-DD
+
+## Problem
+<what, why>
+
+## Design
+<decisions, alternatives rejected>
+
+## Checklist
+- [ ] item
+- [x] completed item
+
+## Attempts
+### Attempt N (YYYY-MM-DD HH:MM)
+Approach: ...
+Result: ...
+
+## Summary
+Current state: ...
+Key learnings: ...
+Next steps: ...
+
+## Notes
+<breadcrumbs - pointers to recoverable info>
+
+## Budget (optional)
+Estimate: <tokens> (planning: X, impl: Y, validation: Z)
+Variance: low|med|high
+Intervention: autonomous|checkpoints|steering|collaborative
+Spent: <tokens>
+```
+
+Budget uses tokens (measurable) not time. Variance = estimate spread (low=tight, high=wide). Intervention = human engagement pattern, not duration.
 
 **Scratch space**: Store any temporary agent work here - it's version-controlled separately from the main repo.
 

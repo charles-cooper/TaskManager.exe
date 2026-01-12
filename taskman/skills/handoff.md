@@ -4,6 +4,7 @@ Mid-task handoff - save detailed context for next session.
    - Attempts: what was tried, what failed (brief - just approach + outcome)
    - Summary: current state, key learnings, next steps
    - Notes: **breadcrumbs only** - pointers to recoverable information
+   - Budget: update Spent tokens if tracking
 
 2. Run: taskman sync "handoff: $ARGUMENTS"
 

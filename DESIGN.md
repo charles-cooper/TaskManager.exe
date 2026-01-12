@@ -103,6 +103,22 @@ Next steps: ...
 
 ## Notes
 <breadcrumbs, file:line references>
+
+## Budget (optional)
+Estimate: <tokens> (planning: X, impl: Y, validation: Z)
+Variance: low|med|high
+Intervention: autonomous|checkpoints|steering|collaborative
+Spent: <tokens> (update on handoff)
+<!--
+Use tokens/variance/intervention instead of points or time.
+- Tokens: measurable agent compute cost
+- Variance: estimate spread (low=tight, high=could be way off)
+- Intervention: describe engagement pattern, don't quantify human time
+  - autonomous: no input needed
+  - checkpoints: review at milestones
+  - steering: direction at decision points
+  - collaborative: ongoing back-and-forth
+-->
 ```
 
 ## Versioning Model

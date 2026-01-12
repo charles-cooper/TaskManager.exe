@@ -66,6 +66,8 @@ Next steps: ...
 <gotchas, breadcrumbs>
 ```
 
+**Effort tracking:** Tasks should support effort estimation using tokens (measurable) rather than time (unmeasurable for agents).
+
 ## Requirements
 
 ### Core
