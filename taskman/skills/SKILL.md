@@ -50,6 +50,7 @@ See `/handoff` for writing breadcrumbs, `/continue` for expanding them.
 |---------|----------|
 | /continue | Resuming work from a previous session |
 | /handoff | Saving context mid-task for next session |
+| /remember | Persisting learnings to memory files |
 | /complete | Finishing and archiving a task |
 | /sync | Syncing .agent-files with origin |
 | /describe | Creating a named checkpoint |
