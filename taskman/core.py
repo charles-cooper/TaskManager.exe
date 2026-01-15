@@ -109,6 +109,7 @@ def describe(reason: str) -> str:
 
     1. jj status (trigger snapshot)
     2. jj describe -m "<reason>"
+    3. jj new (start fresh working copy)
 
     Returns: Revision ID and confirmation
     """
@@ -116,17 +117,21 @@ def describe(reason: str) -> str:
     run_jj(["status"], cwd)
     run_jj(["describe", "-m", reason], cwd)
     rev = _current_rev_id(cwd)
-    return f"described {rev}: {reason}"
+    # Start fresh working copy so subsequent edits don't modify the checkpoint.
+    # (jj auto-snapshots before all commands, so @ already contains our changes)
+    run_jj(["new"], cwd)
+    return f"checkpoint {rev}: {reason}"
 
 
 def sync(reason: str) -> str:
-    """Full sync: describe, fetch, rebase, push.
+    """Full sync: describe, fetch, rebase, push, new.
 
     1. jj describe -m "<reason>"
     2. jj git fetch
     3. jj rebase -d main@origin (skip if no remote branch)
     4. Check jj status for conflicts -> return if conflicts
     5. jj git push -> return error if rejected
+    6. jj new (start fresh working copy)
 
     Returns: Step-by-step status or conflict info
     """
@@ -158,6 +163,8 @@ def sync(reason: str) -> str:
         push_cmd = ["git", "push"] if has_remote else ["git", "push", "--all"]
         run_jj(push_cmd, cwd)
         steps.append("git push: ok")
+        # Start fresh working copy so subsequent edits don't modify pushed commit
+        run_jj(["new"], cwd)
     except RuntimeError as exc:
         err_msg = str(exc)
         steps.append("git push: FAILED")
