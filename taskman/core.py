@@ -336,6 +336,7 @@ def wt(name: str | None = None, *, new_branch: bool = False) -> str:
         run_jj(["git", "clone", str(origin), str(clone)], worktree_dir)
         run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
         run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
+        run_jj(["new", "main@origin"], clone)
 
         return f"Created worktree at worktrees/{name}/"
     else:
@@ -347,6 +348,7 @@ def wt(name: str | None = None, *, new_branch: bool = False) -> str:
         run_jj(["git", "clone", str(origin), str(clone)], cwd)
         run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
         run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
+        run_jj(["new", "main@origin"], clone)
         return f"Cloned .agent-files from {origin}"
 
 

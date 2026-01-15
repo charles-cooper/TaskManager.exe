@@ -1,3 +1,4 @@
+import subprocess
 import pytest
 from taskman import core
 
@@ -54,3 +55,52 @@ def test_history_batch_returns_content(jj_repo, monkeypatch):
 
     result = core.history_batch("STATUS.md", "@--", "@")
     assert "content" in result
+
+
+def test_wt_checks_out_files(tmp_path, monkeypatch):
+    """wt() checks out files from bare repo via jj new main@origin"""
+    main_repo = tmp_path / "main"
+    main_repo.mkdir()
+    monkeypatch.chdir(main_repo)
+
+    # Initialize main repo (needed for git worktree)
+    subprocess.run(["git", "init"], cwd=main_repo, check=True)
+    (main_repo / "README.md").write_text("# Main\n")
+    subprocess.run(["git", "add", "README.md"], cwd=main_repo, check=True)
+    subprocess.run(["git", "commit", "-m", "init"], cwd=main_repo, check=True)
+
+    # Initialize: bare repo + agent-files with content
+    bare = main_repo / ".agent-files.git"
+    subprocess.run(["git", "init", "--bare", str(bare)], check=True)
+
+    agent_dir = main_repo / ".agent-files"
+    subprocess.run(["jj", "git", "clone", str(bare), str(agent_dir)], check=True)
+    subprocess.run(
+        ["jj", "config", "set", "--repo", "user.name", "Agent"],
+        cwd=agent_dir,
+        check=True,
+    )
+    subprocess.run(
+        ["jj", "config", "set", "--repo", "user.email", "agent@localhost"],
+        cwd=agent_dir,
+        check=True,
+    )
+
+    # Create files and push
+    (agent_dir / "STATUS.md").write_text("# Test Status\n")
+    (agent_dir / "tasks").mkdir()
+    subprocess.run(["jj", "describe", "-m", "init"], cwd=agent_dir, check=True)
+    subprocess.run(
+        ["jj", "bookmark", "create", "main", "-r", "@"], cwd=agent_dir, check=True
+    )
+    subprocess.run(["jj", "git", "push", "--all"], cwd=agent_dir, check=True)
+
+    # Create worktree via wt()
+    result = core.wt("test-wt", new_branch=True)
+    assert "worktrees/test-wt" in result
+
+    # Verify files are checked out in the new worktree's .agent-files
+    wt_agent = main_repo / "worktrees" / "test-wt" / ".agent-files"
+    assert wt_agent.exists()
+    assert (wt_agent / "STATUS.md").exists()
+    assert (wt_agent / "STATUS.md").read_text() == "# Test Status\n"
