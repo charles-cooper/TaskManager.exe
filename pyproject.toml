@@ -1,6 +1,6 @@
 [project]
 name = "taskmanager-exe"
-version = "0.3.3"
+version = "0.3.4"
 description = "Version-controlled task management for AI agents"
 readme = "README.md"
 requires-python = ">=3.11"
