@@ -313,8 +313,9 @@ def wt(name: str | None = None, *, new_branch: bool = False) -> str:
     """Create git worktree and/or clone .agent-files
 
     If name is provided (from main repo):
-        1. Create worktrees/<name>/ via git worktree add
-        2. Clone .agent-files into worktrees/<name>/
+        1. Sync .agent-files (describe, fetch, rebase, push)
+        2. Create worktrees/<name>/ via git worktree add
+        3. Clone .agent-files into worktrees/<name>/
 
     If name is None (recovery for existing worktree):
         1. Clone .agent-files into current directory
@@ -330,6 +331,23 @@ def wt(name: str | None = None, *, new_branch: bool = False) -> str:
             raise ValueError(
                 f"Run 'taskman wt {name}' from main repo ({origin.parent})"
             )
+
+        # Sync .agent-files before cloning to ensure origin is up to date
+        agent_files = cwd / ".agent-files"
+        if agent_files.exists():
+            run_jj(["describe", "-m", "pre-worktree checkpoint"], agent_files)
+            run_jj(["git", "fetch"], agent_files)
+            if _has_remote_main(agent_files):
+                run_jj(["rebase", "-d", "main@origin"], agent_files)
+                _, status_out, _ = run_jj(["status"], agent_files)
+                if _status_has_conflicts(status_out):
+                    raise RuntimeError(
+                        f"Rebase conflicts in .agent-files - resolve before creating worktree:\n{status_out}"
+                    )
+            _setup_main_bookmark(agent_files)
+            run_jj(["git", "push"], agent_files)
+            run_jj(["new"], agent_files)
+
         worktree_dir = cwd / "worktrees" / name
         if worktree_dir.exists():
             raise FileExistsError(f"worktrees/{name} already exists")
@@ -343,7 +361,10 @@ def wt(name: str | None = None, *, new_branch: bool = False) -> str:
         run_jj(["git", "clone", str(origin), str(clone)], worktree_dir)
         run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
         run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
-        run_jj(["new", "main@origin"], clone)
+        if _has_remote_main(clone):
+            run_jj(["new", "main@origin"], clone)
+        else:
+            run_jj(["new"], clone)
 
         return f"Created worktree at worktrees/{name}/"
     else:
@@ -355,7 +376,10 @@ def wt(name: str | None = None, *, new_branch: bool = False) -> str:
         run_jj(["git", "clone", str(origin), str(clone)], cwd)
         run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
         run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
-        run_jj(["new", "main@origin"], clone)
+        if _has_remote_main(clone):
+            run_jj(["new", "main@origin"], clone)
+        else:
+            run_jj(["new"], clone)
         return f"Cloned .agent-files from {origin}"
 
 
