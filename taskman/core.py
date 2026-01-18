@@ -175,7 +175,7 @@ def sync(reason: str) -> str:
             steps.append("     jj config set --user user.email 'you@example.com'")
         elif "rejected" in err_msg.lower() or "non-fast-forward" in err_msg.lower():
             steps.append("Error: push rejected (remote changed)")
-            steps.append("Recovery: run 'taskman sync' again to rebase and retry")
+            steps.append("Recovery: jj git fetch && jj rebase -d main@origin && jj git push")
         else:
             steps.append(err_msg)
         return "\n".join(steps)
