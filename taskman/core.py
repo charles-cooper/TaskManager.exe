@@ -260,127 +260,128 @@ def history_search(pattern: str, file: str | None = None, limit: int = 20) -> st
 # Setup functions
 
 def init() -> str:
-    """Create .agent-files.git/ (bare) + .agent-files/ (clone)
+    """Create .agent-files/ as a jj workspace.
 
-    1. git init --bare .agent-files.git
-    2. jj git clone .agent-files.git .agent-files
-    3. Create initial files: STATUS.md, LONGTERM_MEM.md, MEDIUMTERM_MEM.md, tasks/
-    4. jj describe -m "initial setup" && jj git push
+    1. jj git init .agent-files
+    2. Create initial files: STATUS.md, LONGTERM_MEM.md, MEDIUMTERM_MEM.md, tasks/
+    3. jj describe -m "initial setup"
+
+    No bare repo needed - workspaces share the same jj repo directly.
+    For remote backup, add a git remote later with: jj git remote add origin <url>
     """
     cwd = Path.cwd()
-    bare = cwd / ".agent-files.git"
-    clone = cwd / ".agent-files"
+    agent_files = cwd / ".agent-files"
 
-    if bare.exists() or clone.exists():
-        raise FileExistsError(".agent-files.git or .agent-files already exists")
+    if agent_files.exists():
+        raise FileExistsError(".agent-files already exists")
 
-    _run_cmd_check(["git", "init", "--bare", str(bare)], cwd=cwd)
-    run_jj(["git", "clone", str(bare), str(clone)], cwd)
+    run_jj(["git", "init", str(agent_files)], cwd)
 
     # Set default author for agent commits
-    run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
-    run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
+    run_jj(["config", "set", "--repo", "user.name", "Agent"], agent_files)
+    run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], agent_files)
 
-    (clone / "tasks").mkdir(parents=True, exist_ok=True)
+    (agent_files / "tasks").mkdir(parents=True, exist_ok=True)
     for filename in ["STATUS.md", "LONGTERM_MEM.md", "MEDIUMTERM_MEM.md"]:
-        path = clone / filename
+        path = agent_files / filename
         path.touch(exist_ok=True)
 
-    run_jj(["describe", "-m", "initial setup"], clone)
-    run_jj(["bookmark", "create", "main", "-r", "@"], clone)
-    run_jj(["git", "push", "--all"], clone)
+    run_jj(["describe", "-m", "initial setup"], agent_files)
+    run_jj(["bookmark", "create", "main", "-r", "@"], agent_files)
+    # Start fresh working copy
+    run_jj(["new"], agent_files)
 
-    return "Initialized .agent-files.git and .agent-files"
+    return "Initialized .agent-files"
 
 
-def _find_agent_files_git_dir(start: Path | None = None) -> Path:
+def _find_main_agent_files(start: Path | None = None) -> Path:
+    """Find the main .agent-files workspace (the one with .jj/ directory).
+
+    Searches upward from start (default: cwd). A main workspace has a .jj/
+    directory, while linked workspaces have a .jj file pointing to the main.
+    """
     current = Path.cwd() if start is None else Path(start)
     if current.is_file():
         current = current.parent
 
     while True:
-        candidate = current / ".agent-files.git"
+        candidate = current / ".agent-files"
         if candidate.is_dir():
-            return candidate
+            jj_path = candidate / ".jj"
+            if jj_path.is_dir():
+                # This is the main workspace
+                return candidate
+            elif jj_path.is_file():
+                # This is a linked workspace - read the pointer to find main
+                # .jj file contains path to the main repo's .jj directory
+                pointer = jj_path.read_text().strip()
+                # pointer is path to .jj dir, parent is .agent-files
+                return Path(pointer).parent
         if current.parent == current:
             break
         current = current.parent
 
-    raise FileNotFoundError(".agent-files.git directory not found")
+    raise FileNotFoundError(".agent-files directory not found")
+
+
+def _is_main_workspace(agent_files: Path) -> bool:
+    """Check if agent_files is the main workspace (has .jj/ directory)."""
+    jj_path = agent_files / ".jj"
+    return jj_path.is_dir()
 
 
 def wt(name: str | None = None, *, new_branch: bool = False) -> str:
-    """Create git worktree and/or clone .agent-files
+    """Create git worktree with jj workspace for .agent-files.
 
     If name is provided (from main repo):
-        1. Sync .agent-files (describe, fetch, rebase, push)
-        2. Create worktrees/<name>/ via git worktree add
-        3. Clone .agent-files into worktrees/<name>/
+        1. Create worktrees/<name>/ via git worktree add
+        2. Create jj workspace for .agent-files in worktrees/<name>/
 
     If name is None (recovery for existing worktree):
-        1. Clone .agent-files into current directory
+        1. Create jj workspace for .agent-files in current directory
 
     By default uses existing branch. If new_branch=True, creates new branch.
+
+    All workspaces share the same jj repo - no sync needed between them.
     """
     cwd = Path.cwd()
-    origin = _find_agent_files_git_dir(cwd)
-    in_main_repo = (cwd / ".agent-files.git").exists()
+    main_agent_files = _find_main_agent_files(cwd)
+    in_main_repo = _is_main_workspace(cwd / ".agent-files") if (cwd / ".agent-files").exists() else False
 
     if name:
         if not in_main_repo:
             raise ValueError(
-                f"Run 'taskman wt {name}' from main repo ({origin.parent})"
+                f"Run 'taskman wt {name}' from main repo (where .agent-files/.jj/ exists)"
             )
-
-        # Sync .agent-files before cloning to ensure origin is up to date
-        agent_files = cwd / ".agent-files"
-        if agent_files.exists():
-            run_jj(["describe", "-m", "pre-worktree checkpoint"], agent_files)
-            run_jj(["git", "fetch"], agent_files)
-            if _has_remote_main(agent_files):
-                run_jj(["rebase", "-d", "main@origin"], agent_files)
-                _, status_out, _ = run_jj(["status"], agent_files)
-                if _status_has_conflicts(status_out):
-                    raise RuntimeError(
-                        f"Rebase conflicts in .agent-files - resolve before creating worktree:\n{status_out}"
-                    )
-            _setup_main_bookmark(agent_files)
-            run_jj(["git", "push"], agent_files)
-            run_jj(["new"], agent_files)
 
         worktree_dir = cwd / "worktrees" / name
         if worktree_dir.exists():
             raise FileExistsError(f"worktrees/{name} already exists")
 
+        # Create git worktree for main project
         cmd = ["git", "worktree", "add", str(worktree_dir)]
         if not new_branch:
             cmd.append(name)
         _run_cmd_check(cmd, cwd=cwd)
 
-        clone = worktree_dir / ".agent-files"
-        run_jj(["git", "clone", str(origin), str(clone)], worktree_dir)
-        run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
-        run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
-        if _has_remote_main(clone):
-            run_jj(["new", "main@origin"], clone)
-        else:
-            run_jj(["new"], clone)
+        # Create jj workspace for .agent-files
+        workspace_agent_files = worktree_dir / ".agent-files"
+        run_jj(["workspace", "add", str(workspace_agent_files)], main_agent_files)
 
-        return f"Created worktree at worktrees/{name}/"
+        return f"Created worktree at worktrees/{name}/ with .agent-files workspace"
     else:
         if in_main_repo:
             raise ValueError("Use 'taskman wt <name>' to create a worktree")
-        clone = cwd / ".agent-files"
-        if clone.exists():
+
+        workspace_agent_files = cwd / ".agent-files"
+        if workspace_agent_files.exists():
             raise FileExistsError(".agent-files already exists")
-        run_jj(["git", "clone", str(origin), str(clone)], cwd)
-        run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
-        run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
-        if _has_remote_main(clone):
-            run_jj(["new", "main@origin"], clone)
-        else:
-            run_jj(["new"], clone)
-        return f"Cloned .agent-files from {origin}"
+
+        # Create jj workspace for .agent-files
+        run_jj(["workspace", "add", str(workspace_agent_files)], main_agent_files)
+
+        return f"Created .agent-files workspace (linked to {main_agent_files})"
+
 
 
 def _load_json(path: Path) -> dict:

@@ -30,7 +30,7 @@ def main() -> None:
 
     wt_parser = subparsers.add_parser("wt")
     wt_parser.add_argument("name", nargs="?", default=None,
-                           help="worktree name (omit to just clone .agent-files in current dir)")
+                           help="worktree name (omit to create .agent-files workspace in current dir)")
     wt_parser.add_argument("--new", dest="new_branch", action="store_true",
                            help="create new branch instead of using existing one")
 
