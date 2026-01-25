@@ -254,16 +254,16 @@ def _find_main_agent_files(start: Path | None = None) -> Path:
     while True:
         candidate = current / ".agent-files"
         if candidate.is_dir():
-            jj_path = candidate / ".jj"
-            if jj_path.is_dir():
-                # This is the main workspace
+            jj_repo_path = candidate / ".jj" / "repo"
+            if jj_repo_path.is_dir():
+                # This is a standalone repo (main workspace)
                 return candidate
-            elif jj_path.is_file():
+            elif jj_repo_path.is_file():
                 # This is a linked workspace - read the pointer to find main
-                # .jj file contains path to the main repo's .jj directory
-                pointer = jj_path.read_text().strip()
-                # pointer is path to .jj dir, parent is .agent-files
-                return Path(pointer).parent
+                # .jj/repo file contains path to the main repo's .jj/repo directory
+                pointer = jj_repo_path.read_text().strip()
+                # pointer is path to .jj/repo dir, go up twice for .agent-files
+                return Path(pointer).parent.parent
         if current.parent == current:
             break
         current = current.parent
@@ -272,9 +272,40 @@ def _find_main_agent_files(start: Path | None = None) -> Path:
 
 
 def _is_main_workspace(agent_files: Path) -> bool:
-    """Check if agent_files is the main workspace (has .jj/ directory)."""
-    jj_path = agent_files / ".jj"
-    return jj_path.is_dir()
+    """Check if agent_files is the main workspace (has .jj/repo/ directory)."""
+    jj_repo_path = agent_files / ".jj" / "repo"
+    return jj_repo_path.is_dir()
+
+
+def _create_git_file_for_workspace(workspace_path: Path, main_repo_path: Path) -> None:
+    """Create .git file in workspace pointing to main repo's .git directory.
+
+    WHY THIS EXISTS:
+    jj workspaces created with `jj workspace add` only get a .jj/ directory
+    with a pointer to the main repo's .jj/repo. They do NOT get a .git
+    directory or file.
+
+    This means raw git commands (git status, git log, git diff, etc.) fail
+    with "fatal: not a git repository" in linked workspaces, even though
+    the main repo is colocated with git.
+
+    This is arguably a UX bug in jj - it colocates with git in the main repo
+    but doesn't extend that to linked workspaces.
+
+    WORKAROUND:
+    We create a .git file (not directory) containing a gitdir pointer to the
+    main repo's .git directory. This is the same mechanism git worktrees use.
+
+    Example contents: "gitdir: /path/to/main/.git"
+
+    This allows raw git commands to work in linked workspaces, which is
+    important for users who mix jj and git commands, or for tools that
+    shell out to git.
+    """
+    main_git = main_repo_path / ".git"
+    if main_git.is_dir():
+        workspace_git = workspace_path / ".git"
+        workspace_git.write_text(f"gitdir: {main_git}\n")
 
 
 def wt(name: str | None = None, *, new_branch: bool = False) -> str:
@@ -315,6 +346,9 @@ def wt(name: str | None = None, *, new_branch: bool = False) -> str:
         workspace_agent_files = worktree_dir / ".agent-files"
         run_jj(["workspace", "add", "--name", name, str(workspace_agent_files)], main_agent_files)
 
+        # Create .git file so raw git commands work (see _create_git_file_for_workspace)
+        _create_git_file_for_workspace(workspace_agent_files, main_agent_files)
+
         # Create bookmark matching workspace name
         run_jj(["bookmark", "create", name, "-r", f"{name}@"], workspace_agent_files)
 
@@ -331,67 +365,17 @@ def wt(name: str | None = None, *, new_branch: bool = False) -> str:
         ws_name = cwd.name
         run_jj(["workspace", "add", "--name", ws_name, str(workspace_agent_files)], main_agent_files)
 
+        # Create .git file so raw git commands work (see _create_git_file_for_workspace)
+        _create_git_file_for_workspace(workspace_agent_files, main_agent_files)
+
         # Create bookmark matching workspace name
         run_jj(["bookmark", "create", ws_name, "-r", f"{ws_name}@"], workspace_agent_files)
 
         return f"Created .agent-files workspace '{ws_name}' (linked to {main_agent_files})"
 
 
-def migrate() -> str:
-    """Migrate from old clone/push model to jj workspaces model.
-
-    Old model: .agent-files.git/ (bare) + .agent-files/ (clone)
-    New model: .agent-files/ (main workspace) + workspaces via jj workspace add
-
-    Steps:
-    1. Verify old model exists (.agent-files.git/)
-    2. Remove .agent-files.git/ (no longer needed)
-    3. Warn about existing worktree clones
-
-    The .agent-files/ clone becomes the main workspace automatically.
-    """
-    cwd = Path.cwd()
-    bare = cwd / ".agent-files.git"
-    agent_files = cwd / ".agent-files"
-
-    if not bare.exists():
-        return "No migration needed - .agent-files.git/ not found"
-
-    if not agent_files.exists():
-        return "Error: .agent-files/ not found - cannot migrate"
-
-    # Check for worktree clones that need manual handling
-    worktrees_dir = cwd / "worktrees"
-    worktree_clones = []
-    if worktrees_dir.exists():
-        for wt_dir in worktrees_dir.iterdir():
-            if wt_dir.is_dir():
-                wt_agent = wt_dir / ".agent-files"
-                if wt_agent.exists():
-                    jj_path = wt_agent / ".jj"
-                    # Old clone has .jj/ directory, workspace has .jj file
-                    if jj_path.is_dir():
-                        worktree_clones.append(wt_dir.name)
-
-    # Remove the bare repo
-    shutil.rmtree(bare)
-
-    result = ["Migration complete:"]
-    result.append(f"  - Removed {bare}")
-    result.append(f"  - {agent_files} is now the main workspace")
-
-    if worktree_clones:
-        result.append("")
-        result.append("WARNING: Found worktree clones that need manual migration:")
-        for name in worktree_clones:
-            result.append(f"  - worktrees/{name}/.agent-files")
-        result.append("")
-        result.append("To migrate each worktree:")
-        result.append("  1. cd worktrees/<name>")
-        result.append("  2. rm -rf .agent-files")
-        result.append("  3. taskman wt  # (no name = create workspace in current dir)")
-
-    return "\n".join(result)
+# Re-export migrate from its own module
+from taskman.migrate import migrate  # noqa: F401
 
 
 def _load_json(path: Path) -> dict:
