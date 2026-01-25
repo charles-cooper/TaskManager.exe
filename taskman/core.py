@@ -518,6 +518,8 @@ def install_skills(agent: str) -> str:
         dest_dir = home / ".claude" / "skills" / "taskman"
     elif agent == "codex":
         dest_dir = home / ".codex" / "skills" / "taskman"
+    elif agent == "pi":
+        dest_dir = home / ".pi" / "agent" / "skills" / "taskman"
     else:
         raise ValueError(f"Unknown agent: {agent}")
 
@@ -594,6 +596,8 @@ def uninstall_skills(agent: str) -> str:
         dest_dir = home / ".claude" / "skills" / "taskman"
     elif agent == "codex":
         dest_dir = home / ".codex" / "skills" / "taskman"
+    elif agent == "pi":
+        dest_dir = home / ".pi" / "agent" / "skills" / "taskman"
     else:
         raise ValueError(f"Unknown agent: {agent}")
 

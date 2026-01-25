@@ -21,11 +21,11 @@ def main() -> None:
     install_mcp = subparsers.add_parser("install-mcp")
     install_mcp.add_argument("agent", choices=["claude", "cursor", "codex"])
     install_skills = subparsers.add_parser("install-skills")
-    install_skills.add_argument("agent", choices=["claude", "codex"])
+    install_skills.add_argument("agent", choices=["claude", "codex", "pi"])
     uninstall_mcp = subparsers.add_parser("uninstall-mcp")
     uninstall_mcp.add_argument("agent", choices=["claude", "cursor", "codex"])
     uninstall_skills = subparsers.add_parser("uninstall-skills")
-    uninstall_skills.add_argument("agent", choices=["claude", "codex"])
+    uninstall_skills.add_argument("agent", choices=["claude", "codex", "pi"])
     subparsers.add_parser("stdio")
 
     wt_parser = subparsers.add_parser("wt")
