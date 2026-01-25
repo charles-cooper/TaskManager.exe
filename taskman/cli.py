@@ -18,6 +18,7 @@ def main() -> None:
 
     # Setup commands
     subparsers.add_parser("init")
+    subparsers.add_parser("migrate", help="migrate from old clone/push model to jj workspaces")
     install_mcp = subparsers.add_parser("install-mcp")
     install_mcp.add_argument("agent", choices=["claude", "cursor", "codex"])
     install_skills = subparsers.add_parser("install-skills")
@@ -60,6 +61,8 @@ def main() -> None:
 
     if args.command == "init":
         print(core.init())
+    elif args.command == "migrate":
+        print(core.migrate())
     elif args.command == "wt":
         print(core.wt(args.name, new_branch=args.new_branch))
     elif args.command == "install-mcp":

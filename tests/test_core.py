@@ -87,8 +87,9 @@ def test_wt_creates_workspace(tmp_path, monkeypatch):
     (agent_dir / "STATUS.md").write_text("# Test Status\n")
     (agent_dir / "tasks").mkdir()
     subprocess.run(["jj", "describe", "-m", "init"], cwd=agent_dir, check=True)
+    # Create bookmark matching default workspace name
     subprocess.run(
-        ["jj", "bookmark", "create", "main", "-r", "@"], cwd=agent_dir, check=True
+        ["jj", "bookmark", "create", "default", "-r", "@"], cwd=agent_dir, check=True
     )
 
     # Create worktree via wt()
