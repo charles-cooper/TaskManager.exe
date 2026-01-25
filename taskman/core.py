@@ -1,5 +1,4 @@
 import json
-import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -38,46 +37,6 @@ def _current_rev_id(cwd: Path) -> str:
         cwd,
     )
     return out.strip()
-
-
-def _has_remote_main(cwd: Path) -> bool:
-    try:
-        run_jj(["log", "-r", "main@origin", "--no-graph", "-T", "commit_id"], cwd)
-    except RuntimeError:
-        return False
-    return True
-
-
-def _is_main_tracked(cwd: Path) -> bool:
-    """Check if main@origin is tracked (linked to local main)."""
-    _, out, _ = run_jj(["bookmark", "list", "--all"], cwd)
-    # Tracked: "main: xyz abc" with "main@origin" on separate line
-    # Untracked: "main@origin [new] untracked"
-    for line in out.splitlines():
-        if "main@origin" in line and "untracked" in line:
-            return False
-    return True
-
-
-def _setup_main_bookmark(cwd: Path) -> None:
-    """Ensure main bookmark exists, tracks main@origin, and points to @."""
-    # Track main@origin if exists and untracked
-    if _has_remote_main(cwd) and not _is_main_tracked(cwd):
-        run_jj(["bookmark", "track", "main@origin"], cwd)
-
-    # Set main bookmark to current revision (creates if doesn't exist)
-    try:
-        run_jj(["bookmark", "set", "main", "-r", "@"], cwd)
-    except RuntimeError as exc:
-        # If bookmark doesn't exist, create it
-        if "no such bookmark" in str(exc).lower():
-            run_jj(["bookmark", "create", "main", "-r", "@"], cwd)
-        else:
-            raise
-
-
-def _status_has_conflicts(status_out: str) -> bool:
-    return bool(re.search(r"(?im)^(conflicts|conflicted)\b", status_out))
 
 
 def _rev_list_for_revset(revset: str, cwd: Path) -> list[str]:
@@ -123,17 +82,26 @@ def describe(reason: str) -> str:
     return f"checkpoint {rev}: {reason}"
 
 
+def _current_workspace_name(cwd: Path) -> str:
+    """Get the current workspace name."""
+    _, out, _ = run_jj(
+        ["workspace", "list", "--no-graph", "-T", 'if(self, name ++ "\\n")'],
+        cwd,
+    )
+    # Output is just the current workspace name
+    return out.strip() or "default"
+
+
 def sync(reason: str) -> str:
-    """Full sync: describe, fetch, rebase, push, new.
+    """Sync working copy: describe, update workspace bookmark.
 
     1. jj describe -m "<reason>"
-    2. jj git fetch
-    3. jj rebase -d main@origin (skip if no remote branch)
-    4. Check jj status for conflicts -> return if conflicts
-    5. jj git push -> return error if rejected
-    6. jj new (start fresh working copy)
+    2. jj bookmark set <workspace> -r @ (move workspace bookmark forward)
+    3. jj new (start fresh working copy)
 
-    Returns: Step-by-step status or conflict info
+    Each workspace has its own bookmark matching its name.
+
+    Returns: Step-by-step status
     """
     cwd = _agent_files_cwd()
     steps: list[str] = []
@@ -142,44 +110,22 @@ def sync(reason: str) -> str:
     rev = _current_rev_id(cwd)
     steps.append(f"rev: {rev}")
 
-    run_jj(["git", "fetch"], cwd)
-    steps.append("git fetch: ok")
+    # Get current workspace name for bookmark
+    workspace = _current_workspace_name(cwd)
 
-    has_remote = _has_remote_main(cwd)
-    if has_remote:
-        run_jj(["rebase", "-d", "main@origin"], cwd)
-        steps.append("rebase: main@origin")
-    else:
-        steps.append("rebase: skipped (no main@origin)")
-
-    _, status_out, _ = run_jj(["status"], cwd)
-    if _status_has_conflicts(status_out):
-        return "conflicts detected:\n" + status_out
-
-    _setup_main_bookmark(cwd)
-
+    # Move workspace bookmark to current revision
     try:
-        # Use --all for first push (no remote yet), regular push otherwise
-        push_cmd = ["git", "push"] if has_remote else ["git", "push", "--all"]
-        run_jj(push_cmd, cwd)
-        steps.append("git push: ok")
-        # Start fresh working copy so subsequent edits don't modify pushed commit
-        run_jj(["new"], cwd)
-    except RuntimeError as exc:
-        err_msg = str(exc)
-        steps.append("git push: FAILED")
-        # Extract useful info from jj error
-        if "no author" in err_msg.lower() or "no committer" in err_msg.lower():
-            steps.append("Error: commit has no author/committer set")
-            steps.append("Fix: jj config set --user user.name 'Your Name'")
-            steps.append("     jj config set --user user.email 'you@example.com'")
-        elif "rejected" in err_msg.lower() or "non-fast-forward" in err_msg.lower():
-            steps.append("Error: push rejected (remote changed)")
-            steps.append("Recovery: jj git fetch && jj rebase -d main@origin && jj git push")
-        else:
-            steps.append(err_msg)
-        return "\n".join(steps)
+        run_jj(["bookmark", "set", workspace, "-r", "@"], cwd)
+        steps.append(f"bookmark: {workspace} -> @")
+    except RuntimeError:
+        # Create if doesn't exist
+        try:
+            run_jj(["bookmark", "create", workspace, "-r", "@"], cwd)
+            steps.append(f"bookmark: created {workspace}")
+        except RuntimeError:
+            steps.append("bookmark: failed")
 
+    run_jj(["new"], cwd)
     return "\n".join(steps)
 
 
@@ -260,127 +206,192 @@ def history_search(pattern: str, file: str | None = None, limit: int = 20) -> st
 # Setup functions
 
 def init() -> str:
-    """Create .agent-files.git/ (bare) + .agent-files/ (clone)
+    """Create .agent-files/ as a jj workspace.
 
-    1. git init --bare .agent-files.git
-    2. jj git clone .agent-files.git .agent-files
-    3. Create initial files: STATUS.md, LONGTERM_MEM.md, MEDIUMTERM_MEM.md, tasks/
-    4. jj describe -m "initial setup" && jj git push
+    1. jj git init .agent-files
+    2. Create initial files: STATUS.md, LONGTERM_MEM.md, MEDIUMTERM_MEM.md, tasks/
+    3. jj describe -m "initial setup"
+
+    No bare repo needed - workspaces share the same jj repo directly.
+    For remote backup, add a git remote later with: jj git remote add origin <url>
     """
     cwd = Path.cwd()
-    bare = cwd / ".agent-files.git"
-    clone = cwd / ".agent-files"
+    agent_files = cwd / ".agent-files"
 
-    if bare.exists() or clone.exists():
-        raise FileExistsError(".agent-files.git or .agent-files already exists")
+    if agent_files.exists():
+        raise FileExistsError(".agent-files already exists")
 
-    _run_cmd_check(["git", "init", "--bare", str(bare)], cwd=cwd)
-    run_jj(["git", "clone", str(bare), str(clone)], cwd)
+    run_jj(["git", "init", str(agent_files)], cwd)
 
     # Set default author for agent commits
-    run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
-    run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
+    run_jj(["config", "set", "--repo", "user.name", "Agent"], agent_files)
+    run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], agent_files)
 
-    (clone / "tasks").mkdir(parents=True, exist_ok=True)
+    (agent_files / "tasks").mkdir(parents=True, exist_ok=True)
     for filename in ["STATUS.md", "LONGTERM_MEM.md", "MEDIUMTERM_MEM.md"]:
-        path = clone / filename
+        path = agent_files / filename
         path.touch(exist_ok=True)
 
-    run_jj(["describe", "-m", "initial setup"], clone)
-    run_jj(["bookmark", "create", "main", "-r", "@"], clone)
-    run_jj(["git", "push", "--all"], clone)
+    run_jj(["describe", "-m", "initial setup"], agent_files)
+    # Create bookmark matching workspace name (jj default is "default")
+    run_jj(["bookmark", "create", "default", "-r", "@"], agent_files)
+    # Start fresh working copy
+    run_jj(["new"], agent_files)
 
-    return "Initialized .agent-files.git and .agent-files"
+    return "Initialized .agent-files"
 
 
-def _find_agent_files_git_dir(start: Path | None = None) -> Path:
+def _find_main_agent_files(start: Path | None = None) -> Path:
+    """Find the main .agent-files workspace (the one with .jj/ directory).
+
+    Searches upward from start (default: cwd). A main workspace has a .jj/
+    directory, while linked workspaces have a .jj file pointing to the main.
+    """
     current = Path.cwd() if start is None else Path(start)
     if current.is_file():
         current = current.parent
 
     while True:
-        candidate = current / ".agent-files.git"
+        candidate = current / ".agent-files"
         if candidate.is_dir():
-            return candidate
+            jj_path = candidate / ".jj"
+            if jj_path.is_dir():
+                # This is the main workspace
+                return candidate
+            elif jj_path.is_file():
+                # This is a linked workspace - read the pointer to find main
+                # .jj file contains path to the main repo's .jj directory
+                pointer = jj_path.read_text().strip()
+                # pointer is path to .jj dir, parent is .agent-files
+                return Path(pointer).parent
         if current.parent == current:
             break
         current = current.parent
 
-    raise FileNotFoundError(".agent-files.git directory not found")
+    raise FileNotFoundError(".agent-files directory not found")
+
+
+def _is_main_workspace(agent_files: Path) -> bool:
+    """Check if agent_files is the main workspace (has .jj/ directory)."""
+    jj_path = agent_files / ".jj"
+    return jj_path.is_dir()
 
 
 def wt(name: str | None = None, *, new_branch: bool = False) -> str:
-    """Create git worktree and/or clone .agent-files
+    """Create git worktree with jj workspace for .agent-files.
 
     If name is provided (from main repo):
-        1. Sync .agent-files (describe, fetch, rebase, push)
-        2. Create worktrees/<name>/ via git worktree add
-        3. Clone .agent-files into worktrees/<name>/
+        1. Create worktrees/<name>/ via git worktree add
+        2. Create jj workspace for .agent-files in worktrees/<name>/
 
     If name is None (recovery for existing worktree):
-        1. Clone .agent-files into current directory
+        1. Create jj workspace for .agent-files in current directory
 
     By default uses existing branch. If new_branch=True, creates new branch.
+
+    All workspaces share the same jj repo - no sync needed between them.
     """
     cwd = Path.cwd()
-    origin = _find_agent_files_git_dir(cwd)
-    in_main_repo = (cwd / ".agent-files.git").exists()
+    main_agent_files = _find_main_agent_files(cwd)
+    in_main_repo = _is_main_workspace(cwd / ".agent-files") if (cwd / ".agent-files").exists() else False
 
     if name:
         if not in_main_repo:
             raise ValueError(
-                f"Run 'taskman wt {name}' from main repo ({origin.parent})"
+                f"Run 'taskman wt {name}' from main repo (where .agent-files/.jj/ exists)"
             )
-
-        # Sync .agent-files before cloning to ensure origin is up to date
-        agent_files = cwd / ".agent-files"
-        if agent_files.exists():
-            run_jj(["describe", "-m", "pre-worktree checkpoint"], agent_files)
-            run_jj(["git", "fetch"], agent_files)
-            if _has_remote_main(agent_files):
-                run_jj(["rebase", "-d", "main@origin"], agent_files)
-                _, status_out, _ = run_jj(["status"], agent_files)
-                if _status_has_conflicts(status_out):
-                    raise RuntimeError(
-                        f"Rebase conflicts in .agent-files - resolve before creating worktree:\n{status_out}"
-                    )
-            _setup_main_bookmark(agent_files)
-            run_jj(["git", "push"], agent_files)
-            run_jj(["new"], agent_files)
 
         worktree_dir = cwd / "worktrees" / name
         if worktree_dir.exists():
             raise FileExistsError(f"worktrees/{name} already exists")
 
+        # Create git worktree for main project
         cmd = ["git", "worktree", "add", str(worktree_dir)]
         if not new_branch:
             cmd.append(name)
         _run_cmd_check(cmd, cwd=cwd)
 
-        clone = worktree_dir / ".agent-files"
-        run_jj(["git", "clone", str(origin), str(clone)], worktree_dir)
-        run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
-        run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
-        if _has_remote_main(clone):
-            run_jj(["new", "main@origin"], clone)
-        else:
-            run_jj(["new"], clone)
+        # Create jj workspace for .agent-files with matching name
+        workspace_agent_files = worktree_dir / ".agent-files"
+        run_jj(["workspace", "add", "--name", name, str(workspace_agent_files)], main_agent_files)
 
-        return f"Created worktree at worktrees/{name}/"
+        # Create bookmark matching workspace name
+        run_jj(["bookmark", "create", name, "-r", f"{name}@"], workspace_agent_files)
+
+        return f"Created worktree at worktrees/{name}/ with .agent-files workspace '{name}'"
     else:
         if in_main_repo:
             raise ValueError("Use 'taskman wt <name>' to create a worktree")
-        clone = cwd / ".agent-files"
-        if clone.exists():
+
+        workspace_agent_files = cwd / ".agent-files"
+        if workspace_agent_files.exists():
             raise FileExistsError(".agent-files already exists")
-        run_jj(["git", "clone", str(origin), str(clone)], cwd)
-        run_jj(["config", "set", "--repo", "user.name", "Agent"], clone)
-        run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], clone)
-        if _has_remote_main(clone):
-            run_jj(["new", "main@origin"], clone)
-        else:
-            run_jj(["new"], clone)
-        return f"Cloned .agent-files from {origin}"
+
+        # Use parent directory name as workspace name
+        ws_name = cwd.name
+        run_jj(["workspace", "add", "--name", ws_name, str(workspace_agent_files)], main_agent_files)
+
+        # Create bookmark matching workspace name
+        run_jj(["bookmark", "create", ws_name, "-r", f"{ws_name}@"], workspace_agent_files)
+
+        return f"Created .agent-files workspace '{ws_name}' (linked to {main_agent_files})"
+
+
+def migrate() -> str:
+    """Migrate from old clone/push model to jj workspaces model.
+
+    Old model: .agent-files.git/ (bare) + .agent-files/ (clone)
+    New model: .agent-files/ (main workspace) + workspaces via jj workspace add
+
+    Steps:
+    1. Verify old model exists (.agent-files.git/)
+    2. Remove .agent-files.git/ (no longer needed)
+    3. Warn about existing worktree clones
+
+    The .agent-files/ clone becomes the main workspace automatically.
+    """
+    cwd = Path.cwd()
+    bare = cwd / ".agent-files.git"
+    agent_files = cwd / ".agent-files"
+
+    if not bare.exists():
+        return "No migration needed - .agent-files.git/ not found"
+
+    if not agent_files.exists():
+        return "Error: .agent-files/ not found - cannot migrate"
+
+    # Check for worktree clones that need manual handling
+    worktrees_dir = cwd / "worktrees"
+    worktree_clones = []
+    if worktrees_dir.exists():
+        for wt_dir in worktrees_dir.iterdir():
+            if wt_dir.is_dir():
+                wt_agent = wt_dir / ".agent-files"
+                if wt_agent.exists():
+                    jj_path = wt_agent / ".jj"
+                    # Old clone has .jj/ directory, workspace has .jj file
+                    if jj_path.is_dir():
+                        worktree_clones.append(wt_dir.name)
+
+    # Remove the bare repo
+    shutil.rmtree(bare)
+
+    result = ["Migration complete:"]
+    result.append(f"  - Removed {bare}")
+    result.append(f"  - {agent_files} is now the main workspace")
+
+    if worktree_clones:
+        result.append("")
+        result.append("WARNING: Found worktree clones that need manual migration:")
+        for name in worktree_clones:
+            result.append(f"  - worktrees/{name}/.agent-files")
+        result.append("")
+        result.append("To migrate each worktree:")
+        result.append("  1. cd worktrees/<name>")
+        result.append("  2. rm -rf .agent-files")
+        result.append("  3. taskman wt  # (no name = create workspace in current dir)")
+
+    return "\n".join(result)
 
 
 def _load_json(path: Path) -> dict:

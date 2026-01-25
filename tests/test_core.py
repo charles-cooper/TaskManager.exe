@@ -57,8 +57,8 @@ def test_history_batch_returns_content(jj_repo, monkeypatch):
     assert "content" in result
 
 
-def test_wt_checks_out_files(tmp_path, monkeypatch):
-    """wt() checks out files from bare repo via jj new main@origin"""
+def test_wt_creates_workspace(tmp_path, monkeypatch):
+    """wt() creates jj workspace sharing the same repo"""
     main_repo = tmp_path / "main"
     main_repo.mkdir()
     monkeypatch.chdir(main_repo)
@@ -69,12 +69,9 @@ def test_wt_checks_out_files(tmp_path, monkeypatch):
     subprocess.run(["git", "add", "README.md"], cwd=main_repo, check=True)
     subprocess.run(["git", "commit", "-m", "init"], cwd=main_repo, check=True)
 
-    # Initialize: bare repo + agent-files with content
-    bare = main_repo / ".agent-files.git"
-    subprocess.run(["git", "init", "--bare", str(bare)], check=True)
-
+    # Initialize .agent-files with jj git init (new model - no bare repo)
     agent_dir = main_repo / ".agent-files"
-    subprocess.run(["jj", "git", "clone", str(bare), str(agent_dir)], check=True)
+    subprocess.run(["jj", "git", "init", str(agent_dir)], check=True)
     subprocess.run(
         ["jj", "config", "set", "--repo", "user.name", "Agent"],
         cwd=agent_dir,
@@ -86,21 +83,26 @@ def test_wt_checks_out_files(tmp_path, monkeypatch):
         check=True,
     )
 
-    # Create files and push
+    # Create files
     (agent_dir / "STATUS.md").write_text("# Test Status\n")
     (agent_dir / "tasks").mkdir()
     subprocess.run(["jj", "describe", "-m", "init"], cwd=agent_dir, check=True)
+    # Create bookmark matching default workspace name
     subprocess.run(
-        ["jj", "bookmark", "create", "main", "-r", "@"], cwd=agent_dir, check=True
+        ["jj", "bookmark", "create", "default", "-r", "@"], cwd=agent_dir, check=True
     )
-    subprocess.run(["jj", "git", "push", "--all"], cwd=agent_dir, check=True)
 
     # Create worktree via wt()
     result = core.wt("test-wt", new_branch=True)
     assert "worktrees/test-wt" in result
 
-    # Verify files are checked out in the new worktree's .agent-files
+    # Verify workspace was created in the new worktree
     wt_agent = main_repo / "worktrees" / "test-wt" / ".agent-files"
     assert wt_agent.exists()
+
+    # Workspace should have .jj file (pointer) not .jj directory
+    assert (wt_agent / ".jj").exists()
+
+    # Files should be visible in the workspace
     assert (wt_agent / "STATUS.md").exists()
     assert (wt_agent / "STATUS.md").read_text() == "# Test Status\n"
