@@ -23,7 +23,7 @@ Version-controlled agent memory and task management. The `.agent-files/` directo
     _archive/         # Completed tasks
 ```
 
-**STATUS.md**: Shared state - task index, priorities, cross-agent blockers. Multi-agent safe.
+**STATUS.md**: Shared operational state - task index, priorities, current focuses, cross-agent blockers. Multi-agent safe.
 
 **handoffs/**: Per-agent handoff files. Use `/continue <slug>` and `/handoff <slug>` with your agent name.
 
