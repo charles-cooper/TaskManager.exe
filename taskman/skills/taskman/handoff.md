@@ -24,6 +24,7 @@ Usage: `/handoff <agent-slug> [reason]` (e.g., `/handoff alice EOD`, `/handoff f
 ```markdown
 # HANDOFF: <slug>
 updated: YYYY-MM-DD HH:MM
+commit: <sha or jj change-id>
 focus: TASK_foo.md - <aspect>
 
 ## context
@@ -35,6 +36,8 @@ focus: TASK_foo.md - <aspect>
 ## breadcrumbs
 <slug>: <instruction>
 ```
+
+The `commit:` field anchors the handoff to a specific repo state. Use `git rev-parse --short HEAD` or `jj log -r @ --no-graph -T 'change_id.short()'`.
 
 ## Breadcrumb Principle
 

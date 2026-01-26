@@ -47,7 +47,7 @@ Agent-optimized, dense:
 
 ```markdown
 # <topic>
-updated: YYYY-MM-DD
+updated: YYYY-MM-DD @ <commit>
 
 ## <entry>
 problem: <one line>
@@ -129,7 +129,7 @@ Completed: YYYY-MM-DD
 - [x] completed item
 
 ## Attempts
-### Attempt N (YYYY-MM-DD HH:MM)
+### Attempt N (YYYY-MM-DD HH:MM) @ <commit>
 Approach: ...
 Result: ...
 
@@ -147,6 +147,8 @@ Variance: low|med|high
 Intervention: autonomous|checkpoints|steering|collaborative
 Spent: <tokens>
 ```
+
+Include commit SHA or jj change-id in Attempt headers to anchor work to specific repo state.
 
 Budget uses tokens (measurable) not time. Variance = estimate spread (low=tight, high=wide). Intervention = human engagement pattern, not duration.
 
