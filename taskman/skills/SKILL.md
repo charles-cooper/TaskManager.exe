@@ -94,14 +94,14 @@ topics/
     TOPIC_async_vs_sync.md
 ```
 
-Common groupings:
+Example groupings (not prescriptive - organize however makes sense):
 - `perf/` - benchmarks, optimization experiments
 - `reviews/` - council outputs, code review findings
 - `design/` - design explorations, API sketches, prototypes
 - `decisions/` - why we chose X over Y
 - `bugs/` - root cause analyses, postmortems
 
-Keep flat until 5+ related files, then group.
+Heuristic: keep flat until 5+ related files, then group.
 
 ## Task Format
 

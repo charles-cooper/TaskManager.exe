@@ -19,7 +19,7 @@ Rule of thumb: keep MEDIUMTERM_MEM.md under 500 lines.
 
 4. Update index in MEDIUMTERM_MEM.md to reflect the structure
 
-4. Run: taskman sync "compact: <summary of changes>"
+5. Run: taskman sync "compact: <summary of changes>"
 
 ## Philosophy
 
