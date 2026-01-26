@@ -154,6 +154,8 @@ Budget uses tokens (measurable) not time. Variance = estimate spread (low=tight,
 
 ## Progressive Disclosure
 
+Use the principle of progressive disclosure!
+
 **Store pointers, not content.** Recover on-demand via read/bash/curl.
 
 Format: `<slug>: <recovery-instruction>`

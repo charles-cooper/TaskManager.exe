@@ -9,7 +9,7 @@ Rule of thumb: keep MEDIUMTERM_MEM.md under 500 lines.
    - **Redundant**: Duplicates another → merge or delete
    - **Too specific**: One-off that won't recur → delete
    - **Generalizable**: Similar entries → merge into pattern
-   - **Verbose**: Can be made denser → rewrite
+   - **Too long**: Rewrite as pointers (see Progressive Disclosure in SKILL.md)
 
 3. Reorganize structure as needed:
    - Split large topics
