@@ -11,9 +11,11 @@ Version-controlled agent memory and task management. The `.agent-files/` directo
 
 ```
 .agent-files/
-  STATUS.md           # Task index, current session state
+  STATUS.md           # Shared task index, priorities, blockers
   LONGTERM_MEM.md     # Architecture knowledge (months+)
   MEDIUMTERM_MEM.md   # Patterns, learnings, index for memory topics
+  handoffs/
+    HANDOFF_<slug>.md # Per-agent session context
   topics/
     TOPIC_<slug>.md   # Topic-specific knowledge (agent-organized)
   tasks/
@@ -21,7 +23,9 @@ Version-controlled agent memory and task management. The `.agent-files/` directo
     _archive/         # Completed tasks
 ```
 
-**STATUS.md**: Operational state - task index, current focus, blockers, next steps.
+**STATUS.md**: Shared state - task index, priorities, cross-agent blockers. Multi-agent safe.
+
+**handoffs/**: Per-agent handoff files. Use `/continue <slug>` and `/handoff <slug>` with your agent name.
 
 **LONGTERM_MEM.md**: System architecture, component relationships. Rarely changes.
 
