@@ -13,20 +13,97 @@ Version-controlled agent memory and task management. The `.agent-files/` directo
 .agent-files/
   STATUS.md           # Task index, current session state
   LONGTERM_MEM.md     # Architecture knowledge (months+)
-  MEDIUMTERM_MEM.md   # Patterns, gotchas (weeks)
+  MEDIUMTERM_MEM.md   # Patterns, learnings, index for memory topics
+  topics/
+    TOPIC_<slug>.md   # Topic-specific knowledge (agent-organized)
   tasks/
     TASK_<slug>.md    # Active tasks
     _archive/         # Completed tasks
-  (any other scratch files)
 ```
 
-**STATUS.md**: Operational state - task index, current focus, blockers, next steps. Update, don't overwrite.
+**STATUS.md**: Operational state - task index, current focus, blockers, next steps.
 
 **LONGTERM_MEM.md**: System architecture, component relationships. Rarely changes.
 
-**MEDIUMTERM_MEM.md**: Reusable patterns and gotchas. NOT session logs.
+**MEDIUMTERM_MEM.md**: Reusable patterns and learnings. Index pointing to topics. NOT session logs
 
-**Task files**: One per user-facing work unit. Format:
+**topics/**: Topic files. Agent organizes as needed. Use TOPIC_<slug>.md for findability.
+
+**Task files**: One per user-facing work unit. See Task Format below.
+
+## Topic-Based Memory
+
+MEDIUMTERM_MEM.md should be an index, not a dump. When content grows:
+- Extract related entries to topics/TOPIC_<slug>.md
+- Keep MEDIUMTERM as index + cross-cutting patterns only
+
+### Topic File Format
+
+Agent-optimized, dense:
+
+```markdown
+# <topic>
+updated: YYYY-MM-DD
+
+## <entry>
+problem: <one line>
+fix: <one line>
+check: <command to verify>
+refs: <file:line, other.md#section>
+```
+
+Agents can adapt structure as needed. The key properties:
+- **Dense**: keywords over prose (`problem:` not "The problem we encountered was...")
+- **Validation paths**: `check:` field - how to verify this still holds
+- **Refs**: Enable reconstruction, not just reference
+
+### Index Format
+
+```markdown
+# Memory Index
+
+## Topics
+| slug | description | updated |
+|------|-------------|---------|
+| jj-gotchas | jj CLI pitfalls | 2024-01-26 |
+
+## Cross-Cutting
+<patterns spanning topics - keep lean>
+```
+
+### Example Organizations
+
+Agents can create subdirectories as needed:
+
+```
+topics/
+  TOPIC_jj_gotchas.md       # flat - simple topics
+  TOPIC_release_workflow.md
+  
+  perf/                     # grouped - related investigations
+    TOPIC_checkpoint_sizing.md
+    TOPIC_api_latency.md
+  
+  reviews/                  # council/subagent outputs
+    TOPIC_api_redesign.md
+  
+  design/                   # design explorations, prototypes
+    TOPIC_new_sync_model.md
+  
+  decisions/                # architectural decision records
+    TOPIC_async_vs_sync.md
+```
+
+Common groupings:
+- `perf/` - benchmarks, optimization experiments
+- `reviews/` - council outputs, code review findings
+- `design/` - design explorations, API sketches, prototypes
+- `decisions/` - why we chose X over Y
+- `bugs/` - root cause analyses, postmortems
+
+Keep flat until 5+ related files, then group.
+
+## Task Format
 
 ```markdown
 # TASK: <title>
@@ -69,19 +146,27 @@ Spent: <tokens>
 
 Budget uses tokens (measurable) not time. Variance = estimate spread (low=tight, high=wide). Intervention = human engagement pattern, not duration.
 
-**Scratch space**: Store any temporary agent work here - it's version-controlled separately from the main repo.
+**Scratch space**: .agent-files/ can store any temporary agent work - it's version-controlled separately from the main repo.
 
 ## Progressive Disclosure
 
-Store breadcrumbs (pointers), not content. Recover on-demand via Read/Bash/WebFetch.
+**Store pointers, not content.** Recover on-demand via read/bash/curl.
 
-```
-<slug>: <recovery-instruction>
-```
+Format: `<slug>: <recovery-instruction>`
 
-Examples: `auth-flow: src/auth/login.ts:45-80` | `build-status: run `make build`` | `prev-attempt: jj diff -r @--`
+Examples:
+- `auth-flow: src/auth/login.ts:45-80`
+- `build-status: run make build`
+- `prev-attempt: jj diff -r @--`
+- `issue: github.com/org/repo/issues/123` (curl/WebFetch)
 
-Store inline only: decisions, key insights, non-reproducible errors.
+**HOW > WHAT**: Breadcrumbs should enable reconstruction, not just reference.
+- Bad: `fixed checkpoint bug`
+- Good: `checkpoint-bug: TOPIC_perf.md#sizing (off-by-one in depth calc)`
+
+**Include validation paths**: How to verify a conclusion still holds.
+
+**Store inline only**: Decisions, key insights, non-reproducible errors.
 
 See `/handoff` for writing breadcrumbs, `/continue` for expanding them.
 
@@ -91,7 +176,8 @@ See `/handoff` for writing breadcrumbs, `/continue` for expanding them.
 |---------|----------|
 | /continue | Resuming work from a previous session |
 | /handoff | Saving context mid-task for next session |
-| /remember | Persisting learnings to memory files |
+| /remember | Persisting learnings to memory/topics |
+| /compact | Pruning stale memories, reorganizing |
 | /complete | Finishing and archiving a task |
 | /sync | Syncing .agent-files with origin |
 | /describe | Creating a named checkpoint |
