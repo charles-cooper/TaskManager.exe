@@ -5,7 +5,7 @@ description: Agent memory and task management CLI. Use this skill when you need 
 
 # Taskman
 
-Version-controlled agent memory and task management. The `.agent-files/` directory is scratch space for ANY agent work that should persist across sessions - task tracking, memory, handoffs, notes, or temporary files.
+Version-controlled agent memory and task management. The `.agent-files/` directory is **local scratch space** for agent work that persists across sessions - task tracking, memory, handoffs, notes, or temporary files. It is tracked separately from the main repo and should NEVER be referenced from tracked files or commit messages.
 
 ## Structure
 
@@ -194,4 +194,8 @@ jj does NOT auto-snapshot on file changes alone. A jj command must be run to tri
 
 ## Important
 
-`.agent-files/` should never be committed. Add it to `.gitignore`.
+`.agent-files/` is local scratch space, tracked separately from the main repo.
+
+- Add `.agent-files/` to `.gitignore`
+- **NEVER reference .agent-files content from tracked files or commit messages**
+- Treat as untracked local work - may contain session-specific context, internal task names, or scratch notes that don't belong in the project history
