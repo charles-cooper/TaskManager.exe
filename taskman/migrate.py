@@ -20,33 +20,40 @@ def _has_stale_remote(repo_path: Path) -> bool:
     return False
 
 
-def _find_worktrees_to_migrate(worktrees_dir: Path) -> tuple[list[str], list[str]]:
+def _find_worktrees_to_migrate(worktrees_dir: Path) -> tuple[list[str], list[str], list[str]]:
     """Find worktrees that need migration or repair.
 
     Returns:
-        (worktree_clones, worktree_broken)
+        (worktree_clones, worktree_broken, worktree_missing_git)
         - clones: .jj/repo is directory (old standalone repo)
         - broken: .jj/repo missing (incomplete migration)
+        - missing_git: linked workspace but no .git file
     """
     worktree_clones: list[str] = []
     worktree_broken: list[str] = []
+    worktree_missing_git: list[str] = []
 
     if not worktrees_dir.exists():
-        return worktree_clones, worktree_broken
+        return worktree_clones, worktree_broken, worktree_missing_git
 
     for wt_dir in worktrees_dir.iterdir():
         if wt_dir.is_dir():
             wt_agent = wt_dir / ".agent-files"
             if wt_agent.exists():
                 jj_repo_path = wt_agent / ".jj" / "repo"
+                git_path = wt_agent / ".git"
                 if jj_repo_path.is_dir():
                     # Old clone has .jj/repo as directory
                     worktree_clones.append(wt_dir.name)
-                elif not jj_repo_path.is_file():
+                elif jj_repo_path.is_file():
+                    # Properly linked workspace - check for .git file
+                    if not git_path.exists():
+                        worktree_missing_git.append(wt_dir.name)
+                else:
                     # Missing or broken .jj/repo = incomplete migration
                     worktree_broken.append(wt_dir.name)
 
-    return worktree_clones, worktree_broken
+    return worktree_clones, worktree_broken, worktree_missing_git
 
 
 def _sync_worktrees_to_bare(
@@ -190,8 +197,8 @@ def migrate() -> str:
     has_stale_remote = _has_stale_remote(agent_files) if not has_bare else False
 
     worktrees_dir = cwd / "worktrees"
-    worktree_clones, worktree_broken = _find_worktrees_to_migrate(worktrees_dir)
-    has_worktree_issues = bool(worktree_clones) or bool(worktree_broken)
+    worktree_clones, worktree_broken, worktree_missing_git = _find_worktrees_to_migrate(worktrees_dir)
+    has_worktree_issues = bool(worktree_clones) or bool(worktree_broken) or bool(worktree_missing_git)
 
     if not has_bare and not has_stale_remote and not has_worktree_issues:
         return "No migration needed - .agent-files.git/ not found"
@@ -234,6 +241,16 @@ def migrate() -> str:
         except Exception as e:
             failed.append((name, str(e)))
 
+    # Fix workspaces missing .git file
+    fixed_git: list[str] = []
+    for name in worktree_missing_git:
+        try:
+            wt_agent = worktrees_dir / name / ".agent-files"
+            _create_git_file_for_workspace(wt_agent, agent_files)
+            fixed_git.append(name)
+        except Exception as e:
+            failed.append((name, str(e)))
+
     # Format output
     if migrated:
         result.append("")
@@ -246,6 +263,12 @@ def migrate() -> str:
         result.append("Repaired worktrees:")
         for name in repaired:
             result.append(f"  - worktrees/{name}/.agent-files -> workspace '{name}'")
+
+    if fixed_git:
+        result.append("")
+        result.append("Added .git file to workspaces:")
+        for name in fixed_git:
+            result.append(f"  - worktrees/{name}/.agent-files")
 
     if failed:
         result.append("")
