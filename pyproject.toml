@@ -23,7 +23,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 include = [
     "taskman/**/*.py",
-    "taskman/skills/*.md",
+    "taskman/skills/**/*.md",
 ]
 
 [tool.hatch.build.targets.wheel]

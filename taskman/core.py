@@ -510,22 +510,25 @@ def install_skills(agent: str) -> str:
 
     home = Path.home()
     if agent == "claude":
-        dest_dir = home / ".claude" / "skills" / "taskman"
+        base_dir = home / ".claude" / "skills"
     elif agent == "codex":
-        dest_dir = home / ".codex" / "skills" / "taskman"
+        base_dir = home / ".codex" / "skills"
     elif agent == "pi":
-        dest_dir = home / ".pi" / "agent" / "skills" / "taskman"
+        base_dir = home / ".pi" / "agent" / "skills"
     else:
         raise ValueError(f"Unknown agent: {agent}")
 
-    dest_dir.mkdir(parents=True, exist_ok=True)
+    installed = []
+    for skill_src in skills_dir.iterdir():
+        if not skill_src.is_dir():
+            continue
+        dest_dir = base_dir / skill_src.name
+        if dest_dir.exists():
+            shutil.rmtree(dest_dir)
+        shutil.copytree(skill_src, dest_dir)
+        installed.append(skill_src.name)
 
-    count = 0
-    for path in skills_dir.glob("*.md"):
-        shutil.copy2(path, dest_dir / path.name)
-        count += 1
-
-    return f"Installed {count} skills to {dest_dir}"
+    return f"Installed skills to {base_dir}: {', '.join(installed)}"
 
 
 def uninstall_mcp(agent: str) -> str:
@@ -585,27 +588,27 @@ def uninstall_mcp(agent: str) -> str:
 
 
 def uninstall_skills(agent: str) -> str:
-    """Remove taskman skill files from agent's skills directory."""
+    """Remove installed skill directories."""
+    skills_dir = Path(__file__).resolve().parent / "skills"
     home = Path.home()
     if agent == "claude":
-        dest_dir = home / ".claude" / "skills" / "taskman"
+        base_dir = home / ".claude" / "skills"
     elif agent == "codex":
-        dest_dir = home / ".codex" / "skills" / "taskman"
+        base_dir = home / ".codex" / "skills"
     elif agent == "pi":
-        dest_dir = home / ".pi" / "agent" / "skills" / "taskman"
+        base_dir = home / ".pi" / "agent" / "skills"
     else:
         raise ValueError(f"Unknown agent: {agent}")
 
-    if not dest_dir.is_dir():
-        return f"No skills directory found at {dest_dir}"
+    removed = []
+    for skill_src in skills_dir.iterdir():
+        if not skill_src.is_dir():
+            continue
+        dest_dir = base_dir / skill_src.name
+        if dest_dir.is_dir():
+            shutil.rmtree(dest_dir)
+            removed.append(skill_src.name)
 
-    count = 0
-    for path in dest_dir.glob("*.md"):
-        path.unlink()
-        count += 1
-
-    # Remove the taskman directory if empty
-    if dest_dir.is_dir() and not any(dest_dir.iterdir()):
-        dest_dir.rmdir()
-
-    return f"Removed {count} skills from {dest_dir}"
+    if not removed:
+        return f"No skills found to remove in {base_dir}"
+    return f"Removed skills from {base_dir}: {', '.join(removed)}"
