@@ -24,20 +24,16 @@ Usage: `/handoff <agent-slug> [reason]` (e.g., `/handoff alice EOD`, `/handoff f
 ```markdown
 # HANDOFF: <slug>
 updated: YYYY-MM-DD HH:MM
+focus: TASK_foo.md - <aspect>
 
-## Focus
-Currently working on: TASK_foo.md
-Aspect: <specific part>
-
-## Context
+## context
 <what you were doing, where you left off>
 
-## Next Steps
+## next
 1. ...
-2. ...
 
-## Breadcrumbs
-<slug>: <recovery instruction>
+## breadcrumbs
+<slug>: <instruction>
 ```
 
 ## Breadcrumb Principle
