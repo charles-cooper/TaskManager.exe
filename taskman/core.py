@@ -85,10 +85,10 @@ def describe(reason: str) -> str:
 def _current_workspace_name(cwd: Path) -> str:
     """Get the current workspace name."""
     _, out, _ = run_jj(
-        ["workspace", "list", "-T", 'if(self, name ++ "\\n")'],
+        ["log", "--no-graph", "-r", "@", "-T", 'self.working_copies().map(|wc| wc.name()).join(",")'],
         cwd,
     )
-    # Output is just the current workspace name
+    # Output is the workspace name(s) for the current working copy
     return out.strip() or "default"
 
 
@@ -343,8 +343,9 @@ def wt(name: str | None = None, *, new_branch: bool = False) -> str:
         _run_cmd_check(cmd, cwd=cwd)
 
         # Create jj workspace for .agent-files with matching name
+        # Use -r @ to base new workspace on current revision (otherwise starts at root)
         workspace_agent_files = worktree_dir / ".agent-files"
-        run_jj(["workspace", "add", "--name", name, str(workspace_agent_files)], main_agent_files)
+        run_jj(["workspace", "add", "--name", name, "-r", "@", str(workspace_agent_files)], main_agent_files)
 
         # Create .git file so raw git commands work (see _create_git_file_for_workspace)
         _create_git_file_for_workspace(workspace_agent_files, main_agent_files)
@@ -362,8 +363,9 @@ def wt(name: str | None = None, *, new_branch: bool = False) -> str:
             raise FileExistsError(".agent-files already exists")
 
         # Use parent directory name as workspace name
+        # Use -r @ to base new workspace on current revision (otherwise starts at root)
         ws_name = cwd.name
-        run_jj(["workspace", "add", "--name", ws_name, str(workspace_agent_files)], main_agent_files)
+        run_jj(["workspace", "add", "--name", ws_name, "-r", "@", str(workspace_agent_files)], main_agent_files)
 
         # Create .git file so raw git commands work (see _create_git_file_for_workspace)
         _create_git_file_for_workspace(workspace_agent_files, main_agent_files)

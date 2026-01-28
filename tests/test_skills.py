@@ -3,8 +3,8 @@ from pathlib import Path
 
 
 def test_skill_files_exist():
-    """All skill files exist in taskman/skills/"""
-    skills_dir = Path(__file__).parent.parent / "taskman" / "skills"
+    """All skill files exist in taskman/skills/taskman/"""
+    skills_dir = Path(__file__).parent.parent / "taskman" / "skills" / "taskman"
 
     expected = [
         "describe.md",
@@ -20,7 +20,7 @@ def test_skill_files_exist():
 
 def test_skill_files_have_run_command():
     """Each skill has a 'Run: taskman' command"""
-    skills_dir = Path(__file__).parent.parent / "taskman" / "skills"
+    skills_dir = Path(__file__).parent.parent / "taskman" / "skills" / "taskman"
 
     for skill_file in skills_dir.glob("*.md"):
         content = skill_file.read_text()

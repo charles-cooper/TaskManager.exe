@@ -15,7 +15,7 @@ def e2e_repo(tmp_path):
     )
     assert result.returncode == 0, f"init failed: {result.stderr}"
     assert (repo / ".agent-files").exists()
-    assert (repo / ".agent-files.git").exists()
+    assert (repo / ".agent-files" / ".jj").exists()  # jj repo, not separate .git
 
     return repo
 
