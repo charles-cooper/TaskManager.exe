@@ -29,11 +29,20 @@ def main() -> None:
     uninstall_skills.add_argument("agent", choices=["claude", "codex", "pi"])
     subparsers.add_parser("stdio")
 
-    wt_parser = subparsers.add_parser("wt")
+    wt_parser = subparsers.add_parser("wt", help="create git worktree with jj workspace")
     wt_parser.add_argument("name", nargs="?", default=None,
                            help="worktree name (omit to create .agent-files workspace in current dir)")
     wt_parser.add_argument("--new", dest="new_branch", action="store_true",
                            help="create new branch instead of using existing one")
+
+    subparsers.add_parser("wt-list", help="list worktrees with health status")
+
+    wt_rm_parser = subparsers.add_parser("wt-rm", help="remove worktree and cleanup jj state")
+    wt_rm_parser.add_argument("name", help="worktree name to remove")
+    wt_rm_parser.add_argument("--force", "-f", action="store_true",
+                              help="force removal even with uncommitted changes")
+
+    subparsers.add_parser("wt-prune", help="cleanup orphaned worktree state")
 
     # Operation commands
     desc = subparsers.add_parser("describe")
@@ -65,6 +74,12 @@ def main() -> None:
         print(core.migrate())
     elif args.command == "wt":
         print(core.wt(args.name, new_branch=args.new_branch))
+    elif args.command == "wt-list":
+        print(core.wt_list())
+    elif args.command == "wt-rm":
+        print(core.wt_rm(args.name, force=args.force))
+    elif args.command == "wt-prune":
+        print(core.wt_prune())
     elif args.command == "install-mcp":
         print(core.install_mcp(args.agent))
     elif args.command == "install-skills":

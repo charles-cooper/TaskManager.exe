@@ -308,6 +308,362 @@ def _create_git_file_for_workspace(workspace_path: Path, main_repo_path: Path) -
         workspace_git.write_text(f"gitdir: {main_git}\n")
 
 
+def _find_main_repo(start: Path | None = None) -> Path:
+    """Find the main git repo (parent of worktrees/).
+
+    For worktrees: walks up to find the repo that contains worktrees/
+    For main repo: returns cwd if it has .git directory
+    """
+    current = Path.cwd() if start is None else Path(start)
+    if current.is_file():
+        current = current.parent
+
+    # Check if we're in a worktree (worktrees/<name>/...)
+    for parent in [current] + list(current.parents):
+        if parent.name == "worktrees" and parent.parent.is_dir():
+            main = parent.parent
+            if (main / ".git").is_dir():
+                return main
+
+    # Check if current dir is main repo
+    if (current / ".git").is_dir():
+        return current
+
+    # Walk up looking for .git
+    for parent in current.parents:
+        if (parent / ".git").is_dir():
+            return parent
+
+    raise FileNotFoundError("Git repository not found")
+
+
+def _get_worktree_name_from_path(path: Path, main_repo: Path) -> str | None:
+    """Extract worktree name from path if inside worktrees/<name>/."""
+    try:
+        rel = path.relative_to(main_repo / "worktrees")
+        # First component is the worktree name
+        return rel.parts[0] if rel.parts else None
+    except ValueError:
+        return None
+
+
+def _parse_git_worktrees(main_repo: Path) -> dict[str, dict]:
+    """Parse git worktree list output.
+
+    Returns: {name: {path, branch, valid}} where valid=path exists
+    """
+    code, out, _ = _run_cmd(["git", "worktree", "list", "--porcelain"], cwd=main_repo)
+    if code != 0:
+        return {}
+
+    worktrees = {}
+    current = {}
+    for line in out.splitlines():
+        if line.startswith("worktree "):
+            if current and current.get("path"):
+                # Extract name from path
+                path = Path(current["path"])
+                name = _get_worktree_name_from_path(path, main_repo)
+                if name:
+                    current["valid"] = path.exists()
+                    worktrees[name] = current
+            current = {"path": line[9:]}
+        elif line.startswith("branch "):
+            current["branch"] = line[7:]
+        elif line == "detached":
+            current["detached"] = True
+
+    # Handle last entry
+    if current and current.get("path"):
+        path = Path(current["path"])
+        name = _get_worktree_name_from_path(path, main_repo)
+        if name:
+            current["valid"] = path.exists()
+            worktrees[name] = current
+
+    return worktrees
+
+
+def _parse_jj_workspaces(agent_files: Path) -> dict[str, dict]:
+    """Parse jj workspace list output.
+
+    Returns: {name: {path, commit, valid}} where valid=path exists
+    """
+    try:
+        _, out, _ = run_jj(["workspace", "list"], agent_files)
+    except RuntimeError:
+        return {}
+
+    workspaces = {}
+    for line in out.splitlines():
+        # Format: "name: commit_id description"
+        if ": " not in line:
+            continue
+        name, rest = line.split(": ", 1)
+        # Extract commit (first word after colon)
+        commit = rest.split()[0] if rest.split() else ""
+        # Path is agent_files parent / worktrees / name / .agent-files for non-default
+        if name == "default":
+            path = agent_files
+        else:
+            path = agent_files.parent / "worktrees" / name / ".agent-files"
+        workspaces[name] = {
+            "commit": commit,
+            "path": str(path),
+            "valid": path.exists(),
+        }
+
+    return workspaces
+
+
+def _parse_jj_bookmarks(agent_files: Path) -> set[str]:
+    """Get set of bookmark names."""
+    try:
+        _, out, _ = run_jj(["bookmark", "list", "--template", 'name ++ "\\n"'], agent_files)
+    except RuntimeError:
+        return set()
+
+    return {line.strip() for line in out.splitlines() if line.strip()}
+
+
+def _is_inside(path: Path, target: Path) -> bool:
+    """Check if path is inside or equal to target."""
+    try:
+        path.resolve().relative_to(target.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def wt_list() -> str:
+    """List worktrees with health status.
+
+    Cross-references git worktrees, jj workspaces, and jj bookmarks
+    to detect orphaned or mismatched state.
+    """
+    cwd = Path.cwd()
+    main_repo = _find_main_repo(cwd)
+    main_agent_files = _find_main_agent_files(cwd)
+
+    git_wts = _parse_git_worktrees(main_repo)
+    jj_wss = _parse_jj_workspaces(main_agent_files)
+    jj_bms = _parse_jj_bookmarks(main_agent_files)
+
+    # Collect all names (excluding 'default' which is the main workspace)
+    all_names = (set(git_wts.keys()) | set(jj_wss.keys())) - {"default"}
+
+    if not all_names:
+        return "No worktrees found"
+
+    lines = []
+    for name in sorted(all_names):
+        git = git_wts.get(name)
+        jj_ws = jj_wss.get(name)
+        has_bm = name in jj_bms
+
+        status = []
+
+        # Git worktree status
+        if git:
+            if git.get("valid"):
+                status.append("git:ok")
+            else:
+                status.append("git:orphaned")
+        else:
+            status.append("git:missing")
+
+        # jj workspace status
+        if jj_ws:
+            if jj_ws.get("valid"):
+                status.append("jj-ws:ok")
+            else:
+                status.append("jj-ws:orphaned")
+        else:
+            status.append("jj-ws:missing")
+
+        # Bookmark status
+        if has_bm:
+            status.append("bm:exists")
+
+        lines.append(f"{name}: {' '.join(status)}")
+
+    return "\n".join(lines)
+
+
+def _has_conflicts(rev: str, agent_files: Path) -> bool:
+    """Check if revision has conflicts."""
+    try:
+        _, out, _ = run_jj(
+            ["log", "--no-graph", "-r", rev, "-T", "conflict"],
+            agent_files,
+        )
+        return out.strip() == "true"
+    except RuntimeError:
+        return False
+
+
+def wt_rm(name: str, *, force: bool = False) -> str:
+    """Remove a git worktree and merge its jj workspace changes.
+
+    Steps:
+    1. Check we're not inside the target worktree
+    2. Remove git worktree (if exists)
+    3. Forget jj workspace
+    4. Auto-merge changes into default workspace
+    5. Fail loudly if merge conflicts
+
+    Use --force for git worktree with uncommitted files.
+    """
+    cwd = Path.cwd()
+    main_repo = _find_main_repo(cwd)
+    main_agent_files = _find_main_agent_files(cwd)
+    worktree_dir = main_repo / "worktrees" / name
+
+    # Block removal of current worktree
+    if _is_inside(cwd, worktree_dir):
+        raise ValueError(
+            f"Cannot remove current worktree.\n"
+            f"Run: cd {main_repo} && taskman wt rm {name}"
+        )
+
+    # Block removal of default workspace
+    if name == "default":
+        raise ValueError("Cannot remove default workspace")
+
+    results = []
+    jj_wss = _parse_jj_workspaces(main_agent_files)
+    jj_bms = _parse_jj_bookmarks(main_agent_files)
+
+    # Describe workspace changes before removing
+    if name in jj_wss:
+        try:
+            run_jj(["describe", "-r", f"{name}@", "-m", f"wt-{name}"], main_agent_files)
+        except RuntimeError:
+            pass  # Best effort
+
+    # 1. Remove git worktree
+    git_wts = _parse_git_worktrees(main_repo)
+    if name in git_wts:
+        if git_wts[name].get("valid"):
+            cmd = ["git", "worktree", "remove"]
+            if force:
+                cmd.append("--force")
+            cmd.append(str(worktree_dir))
+            try:
+                _run_cmd_check(cmd, cwd=main_repo)
+                results.append(f"Removed git worktree worktrees/{name}/")
+            except RuntimeError as e:
+                if "contains modified or untracked files" in str(e):
+                    raise ValueError(
+                        f"Worktree has uncommitted files. Use --force to remove anyway."
+                    ) from e
+                raise
+        else:
+            # Worktree entry exists but path is gone - prune it
+            _run_cmd_check(["git", "worktree", "prune"], cwd=main_repo)
+            results.append(f"Pruned stale git worktree entry for {name}")
+    elif worktree_dir.exists():
+        # Directory exists but not a git worktree
+        if force:
+            shutil.rmtree(worktree_dir)
+            results.append(f"Removed directory worktrees/{name}/ (was not a git worktree)")
+        else:
+            results.append(f"Warning: worktrees/{name}/ exists but is not a git worktree")
+
+    # 2. Forget jj workspace
+    if name in jj_wss:
+        try:
+            run_jj(["workspace", "forget", name], main_agent_files)
+            results.append(f"Forgot jj workspace '{name}'")
+        except RuntimeError as e:
+            results.append(f"Warning: failed to forget jj workspace: {e}")
+
+    # 3. Auto-merge changes into default workspace
+    if name in jj_bms:
+        try:
+            run_jj(["squash", "--from", name, "-m", f"merged wt-{name}"], main_agent_files)
+        except RuntimeError as e:
+            results.append(f"Warning: could not auto-merge: {e}")
+            results.append(f"Bookmark '{name}' retained - merge manually: jj squash --from {name}")
+            return "\n".join(results)
+        
+        # Check for conflicts
+        if _has_conflicts("@", main_agent_files):
+            raise ValueError(
+                f"MERGE CONFLICTS after squashing '{name}'!\n"
+                f"\n"
+                f"⚠️  DO NOT use --ours/--theirs blindly - you WILL lose accumulated knowledge.\n"
+                f"\n"
+                f"Resolution steps:\n"
+                f"  cd .agent-files\n"
+                f"  jj resolve              # or edit conflict markers manually\n"
+                f"  jj diff                 # verify result\n"
+                f"  jj bookmark delete {name}  # cleanup after resolving\n"
+                f"\n"
+                f"Guidelines by file type:\n"
+                f"  STATUS.md: merge task lists, keep all active tasks\n"
+                f"  MEDIUMTERM/LONGTERM_MEM.md: combine entries, dedupe, keep all learnings\n"
+                f"  HANDOFF_*.md: keep newer context, check older for unique info\n"
+                f"  TASK_*.md: merge attempt histories and checklists\n"
+                f"\n"
+                f"PRINCIPLE: Err on keeping information. Duplicates can be pruned later. Lost knowledge is gone forever."
+            )
+        
+        # Clean merge - delete bookmark
+        run_jj(["bookmark", "delete", name], main_agent_files)
+        results.append(f"✓ Merged changes from '{name}'")
+
+    if not results:
+        return f"Nothing to clean up for '{name}'"
+
+    return "\n".join(results)
+
+
+def wt_prune() -> str:
+    """Clean up all orphaned worktree state.
+
+    Detects and removes:
+    - Git worktree entries pointing to non-existent directories
+    - jj workspaces with missing working copies
+    - Bookmarks matching orphaned workspace names
+    """
+    cwd = Path.cwd()
+    main_repo = _find_main_repo(cwd)
+    main_agent_files = _find_main_agent_files(cwd)
+
+    results = []
+
+    # 1. Prune git worktrees
+    code, out, _ = _run_cmd(["git", "worktree", "prune", "-v"], cwd=main_repo)
+    if code == 0 and out.strip():
+        for line in out.strip().splitlines():
+            results.append(f"git: {line}")
+
+    # 2. Find and forget orphaned jj workspaces
+    jj_wss = _parse_jj_workspaces(main_agent_files)
+    jj_bms = _parse_jj_bookmarks(main_agent_files)
+
+    for name, ws in jj_wss.items():
+        if name == "default":
+            continue
+        if not ws.get("valid"):
+            try:
+                run_jj(["workspace", "forget", name], main_agent_files)
+                results.append(f"Forgot orphaned jj workspace '{name}'")
+
+                # Also delete matching bookmark
+                if name in jj_bms:
+                    run_jj(["bookmark", "delete", name], main_agent_files)
+                    results.append(f"Deleted orphaned bookmark '{name}'")
+            except RuntimeError as e:
+                results.append(f"Warning: failed to forget workspace {name}: {e}")
+
+    if not results:
+        return "No orphaned state found"
+
+    return "\n".join(results)
+
+
 def wt(name: str | None = None, *, new_branch: bool = False) -> str:
     """Create git worktree with jj workspace for .agent-files.
 

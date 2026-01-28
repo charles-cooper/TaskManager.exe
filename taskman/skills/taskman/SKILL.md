@@ -193,6 +193,9 @@ See `/handoff` for writing breadcrumbs, `/continue` for expanding them.
 | /history-diffs | Viewing diffs across revisions |
 | /history-batch | Fetching file content at revisions |
 | /wt | Setting up .agent-files in a git worktree |
+| /wt-list | Listing worktrees with health status |
+| /wt-rm | Removing a worktree and cleaning up state |
+| /wt-prune | Cleaning up orphaned worktree state |
 
 When a command is invoked, read the corresponding `.md` file in this skill directory for detailed instructions.
 
