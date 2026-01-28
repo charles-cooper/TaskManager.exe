@@ -85,7 +85,7 @@ def describe(reason: str) -> str:
 def _current_workspace_name(cwd: Path) -> str:
     """Get the current workspace name."""
     _, out, _ = run_jj(
-        ["workspace", "list", "--no-graph", "-T", 'if(self, name ++ "\\n")'],
+        ["workspace", "list", "-T", 'if(self, name ++ "\\n")'],
         cwd,
     )
     # Output is just the current workspace name
