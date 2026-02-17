@@ -182,6 +182,7 @@ See `/handoff` for writing breadcrumbs, `/continue` for expanding them.
 
 | Command | Use when |
 |---------|----------|
+| /init | First time setup - creates .agent-files/ in project |
 | /continue | Resuming work from a previous session |
 | /handoff | Saving context mid-task for next session |
 | /remember | Persisting learnings to memory/topics |
