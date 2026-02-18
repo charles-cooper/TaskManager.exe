@@ -1,10 +1,12 @@
-Sync working copy and update workspace bookmark.
+Checkpoint and advance the workspace bookmark in the `.agent-files/` jj repo.
 
 Run: taskman sync "$ARGUMENTS"
 
-1. Creates checkpoint with given reason
-2. Moves workspace's bookmark to current revision
+1. Creates checkpoint with given reason (jj describe + new revision)
+2. Moves this workspace's jj bookmark to current revision
 3. Starts fresh working copy
 
-Each workspace has its own bookmark (e.g., `default`, `feature-x`).
+Each jj workspace has its own bookmark (e.g., `default`, `feature-x`).
+Since `.agent-files/` is a single jj repo shared across workspaces (see SKILL.md#Architecture), synced commits are visible in `jj log` from any workspace — no push/pull needed. To incorporate another workspace's changes, merge or rebase.
+
 Use periodically to mark progress in .agent-files history.

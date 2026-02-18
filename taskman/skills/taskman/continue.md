@@ -2,7 +2,7 @@ Resume work from a previous session.
 
 Usage: `/continue <agent-slug>` (e.g., `/continue alice`, `/continue feature-x`)
 
-1. Run: taskman sync "continue"
+1. Run: taskman sync "continue" (marks session start in history)
 
 2. Read STATUS.md - task index, priorities, blockers (shared across agents)
 

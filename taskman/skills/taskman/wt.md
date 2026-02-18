@@ -1,15 +1,14 @@
 Manage git worktrees with jj workspaces for .agent-files.
 
+`.agent-files/` is a single jj repo (see SKILL.md#Architecture). Each project worktree gets its own jj workspace — a separate working copy of the same repo. Commits are visible across workspaces via `jj log` (no push/pull), but must be merged to combine changes.
+
 ## Create Worktree
 
 Run: `taskman wt $ARGUMENTS`
 
-- No arguments: create .agent-files workspace in current directory (for existing worktrees)
-- `taskman wt <name>`: create worktree + .agent-files workspace for existing branch `<name>`
-- `taskman wt <name> --new`: create worktree + new branch + .agent-files workspace at `worktrees/<name>/`
-
-Workspaces share the same jj repo (like git branches). Each has its own working copy.
-No push/pull needed - commits are immediately visible across workspaces via `jj log`.
+- No arguments: create jj workspace in current directory (for existing worktrees)
+- `taskman wt <name>`: create worktree + jj workspace for existing branch `<name>`
+- `taskman wt <name> --new`: create worktree + new branch + jj workspace at `worktrees/<name>/`
 
 ## List Worktrees
 

@@ -5,7 +5,16 @@ description: Agent memory and task management CLI. Use this skill when you need 
 
 # Taskman
 
-Version-controlled agent memory and task management. The `.agent-files/` directory is **local scratch space** for agent work that persists across sessions - task tracking, memory, handoffs, notes, or temporary files. It is tracked separately from the main repo and should NEVER be referenced from tracked files or commit messages.
+Version-controlled agent memory and task management. The `.agent-files/` directory is **local scratch space** for agent work that persists across sessions - task tracking, memory, handoffs, notes, or temporary files.
+
+## Architecture
+
+`.agent-files/` is a **standalone [jj](../jj/SKILL.md) git repo**, separate from the project's VCS (add to `.gitignore`). Created by `taskman init`.
+
+- **Workspaces**: When the project uses git worktrees, each worktree gets its own jj workspace in the `.agent-files/` repo via `/wt`. Commits are visible across workspaces via `jj log` (no push/pull), but must be merged to combine changes.
+- **Bookmarks**: Each workspace has its own jj bookmark (e.g., `default`, `feature-x`). `/sync` checkpoints the current state and advances the workspace bookmark.
+
+**NEVER reference .agent-files content from tracked files or commit messages.**
 
 ## Structure
 
@@ -188,7 +197,7 @@ See `/handoff` for writing breadcrumbs, `/continue` for expanding them.
 | /remember | Persisting learnings to memory/topics |
 | /compact | Memory maintenance, pruning, reorganizing |
 | /complete | Finishing and archiving a task |
-| /sync | Syncing .agent-files with origin |
+| /sync | Checkpoint and advance workspace bookmark |
 | /describe | Creating a named checkpoint |
 | /history-search | Searching history for patterns |
 | /history-diffs | Viewing diffs across revisions |
@@ -206,8 +215,5 @@ jj does NOT auto-snapshot on file changes alone. A jj command must be run to tri
 
 ## Important
 
-`.agent-files/` is local scratch space, tracked separately from the main repo.
-
-- Add `.agent-files/` to `.gitignore`
 - **NEVER reference .agent-files content from tracked files or commit messages**
 - Treat as untracked local work - may contain session-specific context, internal task names, or scratch notes that don't belong in the project history
