@@ -861,7 +861,12 @@ def install_mcp(agent: str) -> str:
 
 
 def install_skills(agent: str) -> str:
-    """Copy skill files to agent's skills directory."""
+    """Copy skill files to agent's skills directory.
+
+    Note: replaces files within each skill dir (rmtree + copytree), but does NOT
+    remove orphaned skill dirs. If a skill is renamed/deleted, old dirs persist.
+    Add a migrate command if we ever change skill directory names.
+    """
     skills_dir = Path(__file__).resolve().parent / "skills"
     if not skills_dir.is_dir():
         raise FileNotFoundError(f"skills directory not found: {skills_dir}")
