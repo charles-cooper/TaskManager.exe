@@ -98,6 +98,7 @@ def sync(reason: str) -> str:
     1. jj describe -m "<reason>"
     2. jj bookmark set <workspace> -r @ (move workspace bookmark forward)
     3. jj new (start fresh working copy)
+    4. If in a worktree workspace, squash changes into default workspace
 
     Each workspace has its own bookmark matching its name.
 
@@ -126,6 +127,32 @@ def sync(reason: str) -> str:
             steps.append("bookmark: failed")
 
     run_jj(["new"], cwd)
+
+    # If in a non-default workspace, merge changes into default workspace
+    if workspace != "default":
+        main_agent_files = _find_main_agent_files()
+        try:
+            run_jj(
+                ["squash", "--from", workspace, "--into", "default@", "-m", reason],
+                main_agent_files,
+            )
+            steps.append(f"synced: {workspace} -> default")
+        except RuntimeError as e:
+            if _has_conflicts("default@", main_agent_files):
+                steps.append(
+                    f"CONFLICTS syncing {workspace} -> default\n"
+                    f"Resolve in main repo:\n"
+                    f"  cd .agent-files\n"
+                    f"  jj resolve\n"
+                    f"  jj diff  # verify\n"
+                    f"See: jj skill for conflict resolution help"
+                )
+            else:
+                steps.append(
+                    f"sync to default failed: {e}\n"
+                    f"See: jj skill for debugging help"
+                )
+
     return "\n".join(steps)
 
 
