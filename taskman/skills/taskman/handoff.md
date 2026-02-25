@@ -15,9 +15,12 @@ Usage: `/handoff <agent-slug> [reason]` (e.g., `/handoff alice EOD`, `/handoff f
 
 3. If you discovered reusable knowledge, save to topics/ (see /remember)
 
-4. Run: taskman sync "handoff: <slug> - <reason>"
+4. If there are handoff files that are obsolesced (e.g., the handoff from the beginning of the session that has been superseded by a new handoff that you just created), move them to _archive/
 
-5. Update STATUS.md task index only if task status/priority changed (shared state)
+5. Run: taskman sync "handoff: <slug> - <reason>"
+
+6. Update STATUS.md task index only if task status/priority changed (shared state)
+
 
 ## Handoff File Format
 
