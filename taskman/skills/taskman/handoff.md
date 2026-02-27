@@ -9,6 +9,7 @@ Usage: `/handoff <agent-slug> [reason]` (e.g., `/handoff alice EOD`, `/handoff f
    - Summary: current state, key learnings, next steps
    - Breadcrumbs: pointers to recoverable information
    - Blockers (if any)
+   - IMPORTANT: Preserve all user intent from this and previous sessions — goals, preferences, constraints, corrections — and use judgment as to how to frame it. Make sure to phrase it in a way which is preserved across automated handoffs.
 
 3. Update the current task file with:
    - Attempts: what was tried, what failed (approach + outcome only)
