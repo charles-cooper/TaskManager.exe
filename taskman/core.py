@@ -63,6 +63,23 @@ def _escape_revset_value(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', "\\\"")
 
 
+def _ensure_jj_gitignored(agent_files: Path) -> None:
+    """Ensure .jj is listed in .agent-files/.gitignore."""
+    gitignore = agent_files / ".gitignore"
+    if gitignore.exists():
+        content = gitignore.read_text()
+        lines = content.splitlines()
+        if ".jj" not in lines and ".jj/" not in lines:
+            # Append .jj to existing gitignore
+            if content and not content.endswith("\n"):
+                content += "\n"
+            content += ".jj\n"
+            gitignore.write_text(content)
+    else:
+        gitignore.write_text(".jj\n")
+
+
+
 def describe(reason: str) -> str:
     """Create named checkpoint.
 
@@ -105,6 +122,9 @@ def sync(reason: str) -> str:
     """
     cwd = _agent_files_cwd()
     steps: list[str] = []
+
+    # Ensure .jj is gitignored (migration for pre-existing repos)
+    _ensure_jj_gitignored(cwd)
 
     run_jj(["describe", "-m", reason], cwd)
     rev = _current_rev_id(cwd)
@@ -227,6 +247,9 @@ def init() -> str:
     # Set default author for agent commits
     run_jj(["config", "set", "--repo", "user.name", "Agent"], agent_files)
     run_jj(["config", "set", "--repo", "user.email", "agent@localhost"], agent_files)
+
+    # Ensure .jj is in .gitignore so the internal git never tracks jj state
+    _ensure_jj_gitignored(agent_files)
 
     (agent_files / "tasks").mkdir(parents=True, exist_ok=True)
     for filename in ["STATUS.md", "LONGTERM_MEM.md", "MEDIUMTERM_MEM.md"]:

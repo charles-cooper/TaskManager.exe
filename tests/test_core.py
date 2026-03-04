@@ -57,6 +57,52 @@ def test_history_batch_returns_content(jj_repo, monkeypatch):
     assert "content" in result
 
 
+def test_ensure_jj_gitignored_creates_file(tmp_path):
+    """_ensure_jj_gitignored creates .gitignore with .jj when missing"""
+    d = tmp_path / "agent"
+    d.mkdir()
+    core._ensure_jj_gitignored(d)
+    assert (d / ".gitignore").read_text() == ".jj\n"
+
+
+def test_ensure_jj_gitignored_appends(tmp_path):
+    """_ensure_jj_gitignored appends .jj to existing .gitignore"""
+    d = tmp_path / "agent"
+    d.mkdir()
+    (d / ".gitignore").write_text("*.pyc\n")
+    core._ensure_jj_gitignored(d)
+    content = (d / ".gitignore").read_text()
+    assert "*.pyc\n" in content
+    assert ".jj\n" in content
+
+
+def test_ensure_jj_gitignored_idempotent(tmp_path):
+    """_ensure_jj_gitignored doesn't duplicate .jj entry"""
+    d = tmp_path / "agent"
+    d.mkdir()
+    (d / ".gitignore").write_text(".jj\n")
+    core._ensure_jj_gitignored(d)
+    assert (d / ".gitignore").read_text() == ".jj\n"
+
+
+def test_ensure_jj_gitignored_slash_variant(tmp_path):
+    """_ensure_jj_gitignored recognizes .jj/ as equivalent"""
+    d = tmp_path / "agent"
+    d.mkdir()
+    (d / ".gitignore").write_text(".jj/\n")
+    core._ensure_jj_gitignored(d)
+    assert (d / ".gitignore").read_text() == ".jj/\n"
+
+
+def test_init_creates_jj_gitignore(tmp_path, monkeypatch):
+    """init() creates .gitignore with .jj"""
+    monkeypatch.chdir(tmp_path)
+    core.init()
+    gitignore = tmp_path / ".agent-files" / ".gitignore"
+    assert gitignore.exists()
+    assert ".jj" in gitignore.read_text()
+
+
 def test_wt_creates_workspace(tmp_path, monkeypatch):
     """wt() creates jj workspace sharing the same repo"""
     main_repo = tmp_path / "main"
