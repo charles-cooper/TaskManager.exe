@@ -7,6 +7,17 @@ description: Jujutsu version control system. Use when working with jj repositori
 
 Git-compatible VCS with cleaner model. Working copy IS a commit (`@`). No staging area. Conflicts stored in commits. Full undo via operation log.
 
+## Changes Are Never Lost
+
+jj snapshots the repo state on **every operation**. Botched merge, bad rebase, accidental abandon — the previous state is always recoverable:
+
+```bash
+jj op log              # find the operation before the mistake
+jj op restore OP_ID    # restore to that state
+```
+
+**NEVER assume changes are lost after a failed operation.** Before re-doing work or panicking, check `jj op log` and restore. See [patterns/gotchas.md](patterns/gotchas.md) (Operation Restore vs Undo) for details.
+
 ## Quick Reference
 
 ```bash

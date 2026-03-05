@@ -213,6 +213,8 @@ When a command is invoked, read the corresponding `.md` file in this skill direc
 
 jj does NOT auto-snapshot on file changes alone. A jj command must be run to trigger a snapshot. Run `jj st` periodically (after edits or batches of edits) to capture history. Without this, intermediate states are lost.
 
+**Recovery**: jj snapshots repo state on every operation. If an operation goes wrong (botched merge, bad rebase, etc.), changes are **never lost**. Use `jj op log` + `jj op restore OP_ID` to recover. Read the [jj skill](../jj/SKILL.md) before assuming changes are gone.
+
 ## Important
 
 - **NEVER reference .agent-files content from tracked files or commit messages**
