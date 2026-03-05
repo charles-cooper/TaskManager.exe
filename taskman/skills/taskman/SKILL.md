@@ -207,7 +207,7 @@ See `/handoff` for writing breadcrumbs, `/continue` for expanding them.
 | /wt-rm | Removing a worktree and cleaning up state |
 | /wt-prune | Cleaning up orphaned worktree state |
 
-When a command is invoked, read the corresponding `.md` file in this skill directory for detailed instructions.
+When a command is invoked, read the corresponding `.md` file in this skill directory for detailed instructions. `/wt-list`, `/wt-rm`, and `/wt-prune` are documented in `wt.md`.
 
 ## jj Snapshotting
 

@@ -35,6 +35,13 @@ Cleans up:
 
 Use `--force` for git worktrees with uncommitted files.
 
+After `wt-rm`, intelligently merge .agent-files from the removed worktree:
+- Review conflicts (don't blindly `--ours`/`--theirs`)
+- Combine STATUS.md task lists, keep all active tasks
+- Merge memory files (MEDIUMTERM/LONGTERM), dedupe, keep all learnings
+- Preserve all attempt records in TASK_*.md
+- For HANDOFF_*.md, keep newer context but check older for unique info
+
 ## Resolving Merge Conflicts
 
 Merge conflicts are **common** in .agent-files because multiple sessions edit the same files (STATUS.md, MEDIUMTERM_MEM.md, etc).
