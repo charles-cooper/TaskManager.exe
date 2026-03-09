@@ -120,15 +120,53 @@ class TestWtRm:
         # Verify git worktree gone
         assert not wt_dir.exists()
         
-        # Bookmark should be deleted after clean merge
+        # Source bookmark should be deleted after clean merge
         proc = subprocess.run(
-            ["jj", "bookmark", "list"], cwd=agent_dir,
+            ["jj", "bookmark", "list", "--template", 'name ++ "\n"'], cwd=agent_dir,
             capture_output=True, text=True, check=True
         )
-        assert "to-remove" not in proc.stdout
+        bookmark_names = proc.stdout.strip().splitlines()
+        assert "to-remove" not in bookmark_names
         
         # Changes should be in default workspace
         assert (agent_dir / "NOTES.md").exists()
+
+    def test_advances_default_bookmark_after_merge(self, wt_setup, monkeypatch):
+        """wt_rm advances default bookmark to merged commit and creates new @."""
+        main_repo, agent_dir = wt_setup
+        monkeypatch.chdir(main_repo)
+
+        # Record default bookmark position before
+        proc = subprocess.run(
+            ["jj", "log", "--no-graph", "-r", "default", "-T", "change_id.short(8)"],
+            cwd=agent_dir, capture_output=True, text=True, check=True,
+        )
+        old_bookmark = proc.stdout.strip()
+
+        # Create worktree and make changes
+        core.wt("advance-test", new_branch=True)
+        wt_agent = main_repo / "worktrees" / "advance-test" / ".agent-files"
+        (wt_agent / "ADVANCE.md").write_text("# Advance test\n")
+        subprocess.run(["jj", "st"], cwd=wt_agent, capture_output=True, check=True)
+
+        # Remove worktree
+        result = core.wt_rm("advance-test")
+        assert "Merged changes" in result
+
+        # Default bookmark should have advanced past old position
+        proc = subprocess.run(
+            ["jj", "log", "--no-graph", "-r", "default", "-T", "change_id.short(8)"],
+            cwd=agent_dir, capture_output=True, text=True, check=True,
+        )
+        new_bookmark = proc.stdout.strip()
+        assert new_bookmark != old_bookmark, "default bookmark should advance after merge"
+
+        # @ should be a fresh empty commit (child of bookmark)
+        proc = subprocess.run(
+            ["jj", "log", "--no-graph", "-r", "@", "-T", "empty"],
+            cwd=agent_dir, capture_output=True, text=True, check=True,
+        )
+        assert proc.stdout.strip() == "true", "@ should be empty after wt-rm (new working copy)"
 
     def test_blocks_removal_from_inside(self, wt_setup, monkeypatch):
         """wt_rm errors when run from inside target worktree."""

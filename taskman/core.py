@@ -633,8 +633,19 @@ def wt_rm(name: str, *, force: bool = False) -> str:
                 f"PRINCIPLE: Err on keeping information. Duplicates can be pruned later. Lost knowledge is gone forever."
             )
         
-        # Clean merge - delete bookmark
+        # Clean merge - delete source bookmark, advance default, start fresh
         run_jj(["bookmark", "delete", name], main_agent_files)
+
+        # Advance default workspace bookmark to @ (which now has merged content)
+        workspace = _current_workspace_name(main_agent_files)
+        try:
+            run_jj(["bookmark", "set", workspace, "-r", "@"], main_agent_files)
+        except RuntimeError:
+            pass  # Non-critical - bookmark advances on next sync
+
+        # Start fresh working copy so next edits don't amend the merge commit
+        run_jj(["new"], main_agent_files)
+
         results.append(f"✓ Merged changes from '{name}'")
 
     if not results:
