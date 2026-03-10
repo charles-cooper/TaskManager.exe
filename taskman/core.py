@@ -603,18 +603,23 @@ def wt_rm(name: str, *, force: bool = False) -> str:
             results.append(f"Warning: failed to forget jj workspace: {e}")
 
     # 3. Auto-merge changes into default workspace
+    # IMPORTANT: Use jj new (merge commit), NOT jj squash --from.
+    # squash --from rewrites the ancestor commit shared by all workspaces,
+    # causing conflict cascades through every descendant.
+    # Instead: create a merge commit with both parents → no rewrites.
     if name in jj_bms:
         try:
-            run_jj(["squash", "--from", name, "-m", f"merged wt-{name}"], main_agent_files)
+            # Create a merge commit with both @ (default) and the branch as parents
+            run_jj(["new", "@", name, "-m", f"merged wt-{name}"], main_agent_files)
         except RuntimeError as e:
             results.append(f"Warning: could not auto-merge: {e}")
-            results.append(f"Bookmark '{name}' retained - merge manually: jj squash --from {name}")
+            results.append(f"Bookmark '{name}' retained - merge manually: jj new @ {name} -m 'merge'")
             return "\n".join(results)
         
         # Check for conflicts
         if _has_conflicts("@", main_agent_files):
             raise ValueError(
-                f"MERGE CONFLICTS after squashing '{name}'!\n"
+                f"MERGE CONFLICTS after merging '{name}'!\n"
                 f"\n"
                 f"⚠️  DO NOT use --ours/--theirs blindly - you WILL lose accumulated knowledge.\n"
                 f"\n"

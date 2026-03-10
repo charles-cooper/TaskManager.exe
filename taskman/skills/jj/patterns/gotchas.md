@@ -161,6 +161,23 @@ To move parent INTO current (opposite direction):
 jj squash -r @-               # @- contents → @
 ```
 
+## Squash/Rebase Across Workspaces
+
+**NEVER squash or rebase commits that are ancestors of other workspaces.** This rewrites the shared commit, causing conflict cascades through every descendant in every workspace.
+
+```bash
+# WRONG: squash branch into shared ancestor
+jj squash --from feature      # rewrites @- → conflicts everywhere
+
+# CORRECT: merge via new commit (no rewrites)
+jj new @ feature -m "merge"   # new merge commit, parents untouched
+jj bookmark set default -r @
+```
+
+**Rule: prefer merge commits over squash/rebase when multiple workspaces exist.** Agent-files history is scratch — linear history doesn't matter. Safety does.
+
+Recovery: `jj op log` + `jj op restore <op_id>` to before the squash, redo as merge.
+
 ## Operation Restore vs Undo
 
 - `jj undo`: Undoes last operation only

@@ -28,7 +28,7 @@ Run: `taskman wt-rm <name> [--force]`
 Cleans up:
 1. Removes git worktree (`git worktree remove`)
 2. Forgets jj workspace (`jj workspace forget`)
-3. **Auto-merges** changes into default workspace
+3. **Auto-merges** changes into default workspace (via merge commit, not squash)
 4. Deletes bookmark on clean merge
 
 **Must run from outside the target worktree.** If in worktree, command errors with exact cd command to run.
