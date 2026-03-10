@@ -1,5 +1,24 @@
 # Edge Cases & Gotchas
 
+## update-stale Clobbers Unsaved Edits
+
+`jj workspace update-stale` resets the working directory to match `@` **without snapshotting first**. Unsaved edits are permanently lost.
+
+**Dangerous sequence:**
+1. Edit files in working copy (no jj command run → no snapshot)
+2. `@` moves via `--ignore-working-copy` or another workspace
+3. `jj workspace update-stale` → edits overwritten, unrecoverable
+
+**Why:** `update-stale` detects the working copy is out of date and force-checks out the current `@`. It does not snapshot before doing so because the staleness means the operation log has diverged from what the working copy expects.
+
+**Mitigation:** Always run `jj st` before any operation that might cause staleness (workspace switches, `--ignore-working-copy` commands). This triggers a snapshot, making the edits recoverable via `jj op log` + `jj op restore`.
+
+**If edits are lost:** Check `jj op log` — if any jj command ran between your edits and the staleness event, that command's snapshot will contain the edits. Restore with `jj op restore OP_ID`.
+
+## Snapshotting Is Not Automatic
+
+jj only snapshots the working copy when a jj command runs. File saves, editor autosaves, external tools — none trigger a snapshot. Run `jj st` periodically to capture intermediate states.
+
 ## Bookmarks Don't Auto-Move
 
 Unlike git branches, jj bookmarks stay put when you create commits.

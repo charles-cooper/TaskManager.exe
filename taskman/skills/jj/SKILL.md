@@ -78,7 +78,69 @@ main..@ between main and @
 
 **Common Workflows**: See [patterns/workflows.md](patterns/workflows.md) for git-to-jj translation and common patterns
 
-**Edge Cases**: See [patterns/gotchas.md](patterns/gotchas.md) for gotchas and troubleshooting
+## Gotchas
+
+### update-stale Clobbers Unsaved Edits
+
+`jj workspace update-stale` resets the working directory to match `@` **without snapshotting first**. If you have unsaved edits and the working copy became stale, they are **permanently lost**.
+
+Dangerous sequence:
+1. Edit files in working copy
+2. `@` moves via `--ignore-working-copy` or another workspace (no snapshot taken)
+3. `jj workspace update-stale` → **edits gone, unrecoverable**
+
+**Mitigation**: Always `jj st` before operations that might cause staleness. This triggers a snapshot, making edits recoverable via `jj op restore`.
+
+### Snapshotting Is Not Automatic
+
+jj does NOT snapshot on file changes alone — a jj command must run to trigger it. Run `jj st` periodically after edits. Without this, intermediate states are lost and `update-stale` or workspace switches will clobber them.
+
+### Bookmarks Don't Auto-Move
+
+Unlike git branches, jj bookmarks stay put. Always move explicitly:
+```bash
+jj bookmark move feature --to @
+```
+
+### Squash/Rebase Across Workspaces
+
+**NEVER squash or rebase commits that are ancestors of other workspaces.** Rewrites shared history → conflict cascade through every descendant.
+
+```bash
+# WRONG: squash branch into shared ancestor
+jj squash --from feature      # rewrites @- → conflicts everywhere
+
+# CORRECT: merge via new commit
+jj new @ feature -m "merge"   # parents untouched
+```
+
+Recovery: `jj op log` + `jj op restore <op_id>`, redo as merge.
+
+### Divergent Changes
+
+Same change ID with multiple visible commits. Fix:
+```bash
+jj abandon xyz                # abandon one
+# or
+jj squash -r xyz/0 --into xyz/1  # merge them
+```
+
+### git push Requires Bookmarks
+
+`jj git push` without bookmarks is a no-op. Create/move bookmark first:
+```bash
+jj bookmark create NAME -r @
+jj git push --bookmark NAME
+```
+
+### Operation Restore vs Undo
+
+- `jj undo`: last operation only
+- `jj op restore OP_ID`: any point in history
+
+**NEVER assume changes are lost.** Check `jj op log` first.
+
+See [patterns/gotchas.md](patterns/gotchas.md) for extended gotchas (immutable commits, large files, conflict resolution, etc.)
 
 ## Git Translation (Quick)
 
