@@ -80,20 +80,15 @@ main..@ between main and @
 
 ## Gotchas
 
-### update-stale Clobbers Unsaved Edits
+### update-stale Snapshots Before Updating
 
-`jj workspace update-stale` resets the working directory to match `@` **without snapshotting first**. If you have unsaved edits and the working copy became stale, they are **permanently lost**.
+`jj workspace update-stale` **snapshots the current working copy first**, then merges divergent operations, then checks out the desired commit. Unsaved edits are preserved and recoverable via `jj op log` + `jj op restore`.
 
-Dangerous sequence:
-1. Edit files in working copy
-2. `@` moves via `--ignore-working-copy` or another workspace (no snapshot taken)
-3. `jj workspace update-stale` → **edits gone, unrecoverable**
-
-**Mitigation**: Always `jj st` before operations that might cause staleness. This triggers a snapshot, making edits recoverable via `jj op restore`.
+See [patterns/gotchas.md](patterns/gotchas.md) for details.
 
 ### Snapshotting Is Not Automatic
 
-jj does NOT snapshot on file changes alone — a jj command must run to trigger it. Run `jj st` periodically after edits. Without this, intermediate states are lost and `update-stale` or workspace switches will clobber them.
+jj does NOT snapshot on file changes alone — a jj command must run to trigger it. Run `jj st` periodically after edits to capture intermediate states in the operation log.
 
 ### Bookmarks Don't Auto-Move
 
