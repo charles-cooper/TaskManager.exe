@@ -25,7 +25,21 @@ Orphaned = entry exists but path is gone.
 
 Run: `taskman wt-rm <name> [--force]`
 
-Cleans up:
+### Before removing
+
+**Review the worktree's agent files first.** Check for uncommitted knowledge before destroying it:
+
+```bash
+cd worktrees/<name>/.agent-files
+jj st                          # snapshots + shows uncommitted changes
+jj diff                        # what changed vs parent
+jj log                         # commit history
+```
+
+Ingest any valuable context now — you'll need it to merge intelligently after removal (read "Resolving Merge Conflicts" below; load /jj skill + read its conflicts and gotchas subskills).
+
+### What it does
+
 1. Removes git worktree (`git worktree remove`)
 2. Forgets jj workspace (`jj workspace forget`)
 3. **Auto-merges** changes into default workspace (via merge commit, not squash)
@@ -33,9 +47,17 @@ Cleans up:
 
 **Must run from outside the target worktree.** If in worktree, command errors with exact cd command to run.
 
-Use `--force` for git worktrees with uncommitted files.
+### On `--force`
 
-After `wt-rm`, intelligently merge .agent-files from the removed worktree:
+`--force` discards uncommitted files in the git worktree. **Use with caution** — this can destroy work that hasn't been committed. Before using `--force`:
+
+1. Check for uncommitted changes: `git -C worktrees/<name> status`
+2. If there's valuable uncommitted work, commit or stash it first
+3. Only use `--force` when you've confirmed nothing important will be lost (e.g., the worktree only has build artifacts or generated files)
+
+### After removal
+
+Intelligently merge .agent-files from the removed worktree:
 - Review conflicts (don't blindly `--ours`/`--theirs`)
 - Combine STATUS.md task lists, keep all active tasks
 - Merge memory files (MEDIUMTERM/LONGTERM), dedupe, keep all learnings
