@@ -34,6 +34,8 @@ Version-controlled agent memory and task management. The `.agent-files/` directo
 
 **STATUS.md**: Shared operational state - task index, priorities, current focuses, cross-agent blockers. Multi-agent safe.
 
+**Staleness check**: Use the `Updated:` field in task Meta to gauge staleness. Tasks untouched for weeks may need re-evaluation or archival. Note: file mtime is unreliable after jj merges/workspace updates (jj rewrites working copy, resetting mtime).
+
 **handoffs/**: Per-agent handoff files. Use `/continue <slug>` and `/handoff <slug>` with your agent name.
 
 **LONGTERM_MEM.md**: System architecture, component relationships. Rarely changes.
@@ -125,6 +127,7 @@ Heuristic: keep flat until 5+ related files, then group.
 Status: planned|in_progress|blocked|complete
 Priority: P0|P1|P2
 Created: YYYY-MM-DD
+Updated: YYYY-MM-DD
 Completed: YYYY-MM-DD
 
 ## Problem

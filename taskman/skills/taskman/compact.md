@@ -2,7 +2,7 @@ Prune and consolidate memory files, making them more context efficient.
 
 Rule of thumb: keep MEDIUMTERM_MEM.md under 500 lines.
 
-1. Read MEDIUMTERM_MEM.md and `ls topics/`
+1. Read MEDIUMTERM_MEM.md, `ls .agent-files/tasks/ .agent-files/topics/`, and check `Updated:` dates in task/topic files for staleness
 
 2. Evaluate each entry/file:
    - **Stale**: Assumptions no longer hold → archive or delete (see below)

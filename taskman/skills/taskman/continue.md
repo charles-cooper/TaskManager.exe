@@ -8,7 +8,7 @@ Usage: `/continue <agent-slug>` (e.g., `/continue alice`, `/continue feature-x`)
 
 3. Read handoffs/HANDOFF_<slug>.md - your session context, focus, next steps
 
-4. Read the active task file(s) referenced in your handoff
+4. Read the active task file(s) referenced in your handoff. Check `Updated:` in Meta to gauge staleness.
 
 5. Check MEDIUMTERM_MEM.md index - load only topics relevant to current task
 
