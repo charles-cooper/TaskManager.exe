@@ -4,6 +4,8 @@ Manage git worktrees with jj workspaces for .agent-files.
 
 ## Create Worktree
 
+**Before running `taskman wt`**, write any planned .agent-files updates (STATUS.md, memory, tasks, handoffs, etc.) first. The new workspace copies the current working directory state — files not yet written to disk won't be present in the child workspace.
+
 Run: `taskman wt $ARGUMENTS`
 
 - No arguments: create jj workspace in current directory (for existing worktrees)
