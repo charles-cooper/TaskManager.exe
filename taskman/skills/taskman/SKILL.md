@@ -218,6 +218,24 @@ jj does NOT auto-snapshot on file changes alone. A jj command must be run to tri
 
 **Recovery**: jj snapshots repo state on every operation. If an operation goes wrong (botched merge, bad rebase, etc.), changes are **never lost**. Use `jj op log` + `jj op restore OP_ID` to recover. Read the [jj skill](../jj/SKILL.md) before assuming changes are gone.
 
+### NEVER Use `jj workspace update-stale`
+
+**`jj workspace update-stale` is banned.** Do not run it.
+
+`update-stale` **snapshots the current working copy first**, then merges divergent operations, then checks out the desired commit. Unsaved edits are preserved in the snapshot and recoverable via `jj op log`.
+
+**Sequence:**
+1. Edit files in working copy (no jj command run → no snapshot yet)
+2. `@` moves via another workspace or concurrent operation
+3. `jj workspace update-stale` → snapshots edits onto old operation, merges, updates working copy
+
+**Recovery (if someone ran it anyway):** If edits appear lost after `update-stale`, they were captured in the snapshot operation. Use `jj op log` + `jj op restore OP_ID` to recover.
+
+Instead of `update-stale`, if a workspace is stale:
+1. Check `jj op log` to understand what diverged
+2. Use `jj op restore OP_ID` to get back to a known-good state
+3. Re-apply changes manually from there
+
 ## Important
 
 - **NEVER reference .agent-files content from tracked files or commit messages**

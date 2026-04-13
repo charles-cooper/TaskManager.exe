@@ -96,7 +96,7 @@ jj workspace root           # show workspace root
 jj workspace add PATH       # add workspace at PATH
 jj workspace forget [WS]    # forget workspace
 jj workspace list           # list workspaces
-jj workspace update-stale   # update stale workspace
+# jj workspace update-stale — BANNED, do not use. See patterns/gotchas.md
 ```
 
 ## Other
