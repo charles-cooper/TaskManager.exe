@@ -214,27 +214,28 @@ When a command is invoked, read the corresponding `.md` file in this skill direc
 
 ## jj Snapshotting
 
-jj does NOT auto-snapshot on file changes alone. A jj command must be run to trigger a snapshot. Run `jj st` periodically (after edits or batches of edits) to capture history. Without this, intermediate states are lost.
+jj does NOT auto-snapshot on file changes alone. A jj command must be run to trigger a snapshot. Run `jj st` periodically (after edits or batches of edits) to capture history. Without this, intermediate states are lost. Scripts can force a snapshot with `jj util snapshot`.
 
-**Recovery**: jj snapshots repo state on every operation. If an operation goes wrong (botched merge, bad rebase, etc.), changes are **never lost**. Use `jj op log` + `jj op restore OP_ID` to recover. Read the [jj skill](../jj/SKILL.md) before assuming changes are gone.
+**Recovery**: jj snapshots repo state on every operation. If an operation goes wrong (botched merge, bad rebase, etc.), previous state is recoverable for as long as the op log retains it (default: 2 weeks, pruned by `jj util gc`). Use `jj op log` + `jj op restore OP_ID` to recover. Unsnapshotted working-copy edits are the one exception. Read the [jj skill](../jj/SKILL.md) before assuming changes are gone.
 
-### NEVER Use `jj workspace update-stale`
+### `jj workspace update-stale` — use with care
 
-**`jj workspace update-stale` is banned.** Do not run it.
+Not data-destroying, but easy to misread. It snapshots your current working-copy edits onto the stale op (so they're preserved), then checks out the desired `@`. Your edits survive — they just live on a side branch in the op-log DAG, which is easy to mistake for "lost".
 
-`update-stale` **snapshots the current working copy first**, then merges divergent operations, then checks out the desired commit. Unsaved edits are preserved in the snapshot and recoverable via `jj op log`.
+**With `snapshot.auto-update-stale = true`**, the same path runs automatically whenever any command would snapshot.
 
-**Sequence:**
-1. Edit files in working copy (no jj command run → no snapshot yet)
-2. `@` moves via another workspace or concurrent operation
-3. `jj workspace update-stale` → snapshots edits onto old operation, merges, updates working copy
+**Recovery / inspection**:
+- `jj op log` — follow the graph edges; the branch merging back into `@` is the snapshot op holding your edits.
+- `jj --at-op=<snapshot-op-id> diff` — see what was captured.
+- `jj op restore <snapshot-op-id>` — bring those edits back; then cherry-pick/merge into desired `@`.
+- `jj undo` immediately after `update-stale` rewinds the whole thing.
 
-**Recovery (if someone ran it anyway):** If edits appear lost after `update-stale`, they were captured in the snapshot operation. Use `jj op log` + `jj op restore OP_ID` to recover.
+**When to prefer manual recovery**: if the divergence is large or confusing,
+1. `jj op log` — find a known-good op before the concurrent move.
+2. `jj op restore OP_ID` — roll back.
+3. Re-apply intended changes explicitly.
 
-Instead of `update-stale`, if a workspace is stale:
-1. Check `jj op log` to understand what diverged
-2. Use `jj op restore OP_ID` to get back to a known-good state
-3. Re-apply changes manually from there
+See [jj skill gotchas](../jj/patterns/gotchas.md#jj-workspace-update-stale) for the full mechanics.
 
 ## Important
 
