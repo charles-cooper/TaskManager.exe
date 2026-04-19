@@ -1,45 +1,71 @@
 # Edge Cases & Gotchas
 
-## NEVER Use `jj workspace update-stale`
+## `jj workspace update-stale`
 
-**`jj workspace update-stale` is banned.** Do not run it.
+Not data-destroying, but easy to misread. Here's what it actually does (see `cli/src/cli_util.rs::recover_stale_working_copy` in jj 0.40):
 
-`update-stale` **snapshots the current working copy first**, then merges divergent operations, then checks out the desired commit. Unsaved edits are preserved in the snapshot and recoverable via `jj op log`.
+1. Load the repo at the working copy's **last known op** (the stale one).
+2. **Snapshot the current working-copy contents onto that stale op** → any unsaved edits are captured as a commit on the stale branch of the op graph.
+3. Reload the repo at the current head op (where `@` was moved, e.g. by another workspace).
+4. Update files on disk to match the desired `@`.
+5. Snapshot again (picks up any git refs etc.).
 
-**Sequence:**
-1. Edit files in working copy (no jj command run → no snapshot yet)
-2. `@` moves via another workspace or concurrent operation
-3. `jj workspace update-stale` → snapshots edits onto old operation, merges, updates working copy
+If the working copy's last op was garbage-collected (`jj op abandon` + `jj util gc`), step 1 falls back to `create_and_check_out_recovery_commit`, which parents your current files onto the current op's wc commit. Still no data loss.
 
-**Recovery (if someone ran it anyway):** If edits appear lost after `update-stale`, they were captured in the snapshot operation. Use `jj op log` + `jj op restore OP_ID` to recover.
+**With `snapshot.auto-update-stale = true`**, any snapshotting command triggers the same path automatically.
 
-Instead of `update-stale`, if a workspace is stale:
-1. Check `jj op log` to understand what diverged
-2. Use `jj op restore OP_ID` to get back to a known-good state
-3. Re-apply changes manually from there
+### How not to misread `jj op log` after update-stale
+
+The op log afterwards has a branching shape:
+```
+@  <update-stale op>           <- your desired @ now checked out
+├─╮ <snapshot on stale op>   <- YOUR EDITS landed here
+│ │
+│ ╯ <old stale op>           <- the op the working copy was stuck on
+│
+╰── <current head op>         <- where @ had been moved to
+```
+`jj op log` renders the full DAG by default, but with many ops the side branch scrolls off. Follow the graph edges — the branch merging back into `@` is the snapshot op that holds your edits.
+
+### Recovery
+
+- To inspect the captured edits: `jj --at-op=<snapshot-op-id> diff` or `jj --at-op=<snapshot-op-id> log`.
+- To get them back: `jj op restore <snapshot-op-id>` then cherry-pick / merge into the desired `@`.
+- To just abandon the stale branch: `jj undo` right after update-stale rewinds it.
+
+### When to prefer manual recovery instead
+
+If the divergence is large or confusing, it's often cleaner to:
+1. `jj op log` to find a known-good op **before** the concurrent move.
+2. `jj op restore OP_ID` to roll back.
+3. Re-apply intended changes explicitly.
 
 
 
 ## Snapshotting Is Not Automatic
 
-jj only snapshots the working copy when a jj command runs. File saves, editor autosaves, external tools — none trigger a snapshot. Run `jj st` periodically to capture intermediate states.
+jj only snapshots the working copy when a jj command runs. File saves, editor autosaves, external tools — none trigger a snapshot. Run `jj st` periodically to capture intermediate states. For scripts, `jj util snapshot` triggers a snapshot without other side effects (replaces the undocumented `jj debug snapshot`, deprecated in 0.39).
 
-## Bookmarks Don't Auto-Move
+## Bookmark Auto-Move: Follows Rewrites, Not New Children
 
-Unlike git branches, jj bookmarks stay put when you create commits.
+Unlike git branches (which follow HEAD), jj bookmarks bind to a **change ID**:
+
+- **Auto-moves** when the commit is rewritten in place (editing @, amend, rebase, squash-into).
+- **Does NOT follow** when you run `jj new` to create a child.
 
 ```bash
-# WRONG expectation:
+# Auto-move (rewrite): bookmark stays pinned to the change as it evolves
 jj edit feature
-jj new                        # bookmark still on old commit!
+# ... edits auto-amend feature's commit → bookmark moves with it
 
-# CORRECT:
-jj edit feature
-# ... work ...
-jj bookmark move feature --to @   # explicit move
+# No auto-move (new child): bookmark is left on the parent
+jj new feature                     # bookmark `feature` stays on @-, not @
+jj bookmark move feature --to @    # move it yourself
+# or
+jj bookmark advance feature        # advance closest ancestor bookmark to @
 ```
 
-Always move bookmarks explicitly after commits.
+Also: deleting a bookmarked commit (via `jj abandon`) deletes the bookmark. Use `jj abandon --retain-bookmarks` to move them to the parent instead.
 
 ## Divergent Changes
 
@@ -49,6 +75,8 @@ Same change ID with multiple visible commits. Shows as:
 │ ◆  xyz (divergent)
 ```
 
+Find them all with `jj log -r 'divergent()'`. A bare change-id revset errors on a divergent change; disambiguate with `xyz/0`, `xyz/1` ("change offset") syntax.
+
 **Causes:**
 - Concurrent edits in different workspaces
 - `jj duplicate` without abandoning original
@@ -56,11 +84,11 @@ Same change ID with multiple visible commits. Shows as:
 
 **Fix:**
 ```bash
-jj abandon xyz                # abandon one
-# or
-jj squash -r xyz/0 --into xyz/1  # merge them
-# or give new identity
-jj describe -r xyz/0 --reset-author --no-edit
+jj abandon xyz/0                        # abandon one side
+# or fold one side into the other:
+jj squash --from xyz/0 --into xyz/1
+# or give one side a fresh change-id so they stop colliding:
+jj metaedit -r xyz/0 --update-change-id
 ```
 
 ## Conflicted Bookmarks
@@ -160,57 +188,65 @@ jj abandon @                  # delete current commit entirely
 
 ## Commit vs New
 
-- `jj commit -m "msg"`: Finalizes current changes AND creates new empty working copy
-- `jj new`: Creates new empty commit, current changes stay in @-
+- `jj commit -m "msg"`: Describes current `@` and creates a new empty child (like `jj describe + jj new`). Bookmarks do NOT move forward.
+- `jj new`: Creates a new empty child commit; whatever was on `@` stays at `@-`.
 
 ```bash
-# If you want to "save" current state and continue:
-jj commit -m "msg"            # @ is now new empty commit
+# Save current state and continue with a fresh wc commit:
+jj commit -m "msg"            # @ is now a new empty commit; previous state at @-
 
-# If you want to start fresh leaving current alone:
-jj new @                      # @ is new, @- has your work
+# Start a sibling leaving @ alone:
+jj new @-                     # @ is new, previous work is at sibling
 ```
 
 ## Squash Direction
 
-`jj squash` moves changes INTO parent (or --into target).
+The `-r`, `--from`, and `--into` flags all have specific meanings. Mixing them up is a common mistake.
 
 ```bash
-jj squash                     # @ contents → @- (parent)
-jj squash --into REV          # @ contents → REV
+jj squash                     # @ contents → @-   (default: --from @ --into @-)
+jj squash --into REV          # @ contents → REV  (must be an ancestor of @)
+jj squash -r REV              # REV contents → REV's parent
+jj squash --from SRC          # SRC contents → @
+jj squash --from SRC --into DST   # SRC contents → DST
 ```
 
-To move parent INTO current (opposite direction):
-```bash
-jj squash -r @-               # @- contents → @
-```
+There is no `jj squash -r @-` shortcut for "pull @- into @". Use `--from @- --into @`.
 
 ## Squash/Rebase Across Workspaces
 
-**NEVER squash or rebase commits that are ancestors of other workspaces.** This rewrites the shared commit, causing conflict cascades through every descendant in every workspace.
+**Avoid rewriting commits that are ancestors of another workspace's `@`.** Rewriting a shared ancestor changes its commit ID; other workspaces' descendants get auto-rebased onto the new version (may conflict), and their working copies become stale.
 
 ```bash
-# WRONG: squash branch into shared ancestor
-jj squash --from feature      # rewrites @- → conflicts everywhere
+# RISKY: rewrites @- if @- is a shared ancestor
+jj squash                        # default --into @-
+jj squash --into @-              # same
+jj edit @- && <edits>            # amends @-
 
-# CORRECT: merge via new commit (no rewrites)
-jj new @ feature -m "merge"   # new merge commit, parents untouched
+# SAFER: merge via a new commit (no ancestor is rewritten)
+jj new @ feature -m "merge"      # new merge commit
 jj bookmark set default -r @
 ```
 
-**Rule: prefer merge commits over squash/rebase when multiple workspaces exist.** Agent-files history is scratch — linear history doesn't matter. Safety does.
+**Rule: prefer merge commits over rewrites of shared ancestors when multiple workspaces exist.**
 
-Recovery: `jj op log` + `jj op restore <op_id>` to before the squash, redo as merge.
+Recovery: `jj op log` + `jj op restore <op_id>` to before the rewrite, then redo as a merge.
 
-## Operation Restore vs Undo
+## Operation Restore vs Undo vs Revert
 
-- `jj undo`: Undoes last operation only
-- `jj op restore OP_ID`: Restores to any point in history
+- `jj undo` / `jj redo`: undo/redo the *last* operation (LIFO).
+- `jj op revert [OP]`: create a **new** operation that applies the inverse of an earlier one. Later operations stay; replaces the removed `jj op undo` (0.39).
+- `jj op restore OP_ID`: rewind the repo state to that operation, discarding everything after.
+- `jj --at-op=OP_ID <cmd>`: run a read-only command as if at that op (no snapshot).
 
 ```bash
-jj op log                     # find operation ID
-jj op restore abc123          # restore to that state
+jj op log                     # find operation ID; shows full op DAG, incl. divergent branches;
+                              # workspace name shown (0.40+)
+jj op restore abc123          # rewind
+jj op revert abc123           # invert just that one op, preserving later ops
 ```
+
+Default op-log retention is **2 weeks**; `jj util gc` prunes older ops + their unreachable objects.
 
 ## Change ID vs Commit ID in Commands
 

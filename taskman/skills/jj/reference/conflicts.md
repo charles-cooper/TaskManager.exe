@@ -9,20 +9,29 @@
 
 ## Conflict Marker Format
 
-Default "diff" style:
+Default "diff" style (one `%%%%%%%` diff per changed side + one `+++++++` snapshot for the other side):
 ```
 <<<<<<< conflict 1 of 1
-%%%%%%% changes from base to side A
--old line
-+new line from side A
-+++++++ side B
-new line from side B
+%%%%%%% diff from: vpxusssl 38d49363 "merge base"
+\\\\\\\        to: rtsqusxu 2768b0b9 "commit A"
+ apple
+-grape
++grapefruit
+ orange
++++++++ ysrnknol 7a20f389 "commit B"
+APPLE
+GRAPE
+ORANGE
 >>>>>>> conflict 1 of 1 ends
 ```
 
-Shows:
-- What changed from base to side A (diff format)
-- What side B has (snapshot)
+To resolve: apply each `%%%%%%%` diff to the `+++++++` snapshot, then delete the markers.
+
+Alternate styles via `ui.conflict-marker-style`:
+- `"snapshot"`: each side shown as its content (base uses `-------`).
+- `"git"`: Git diff3-style (`<<<<<<<` / `|||||||` / `=======` / `>>>>>>>`); only 2-sided, falls back to snapshot otherwise.
+
+If a file's content would collide with default-length markers, jj uses longer markers (e.g. `<<<<<<<<<<<<<<<`).
 
 ## Resolution Methods
 
@@ -83,9 +92,10 @@ For multiple conflicts in one file, markers are numbered:
 
 Resolve all before conflict is considered resolved.
 
-## Config: Merge Tool
+## Config: Merge Tool and Marker Style
 
 ```toml
 [ui]
-merge-editor = "meld"  # or vimdiff, kdiff3, etc.
+merge-editor = "meld"              # or vimdiff, kdiff3, etc.
+conflict-marker-style = "diff"     # "diff" (default), "snapshot", or "git"
 ```

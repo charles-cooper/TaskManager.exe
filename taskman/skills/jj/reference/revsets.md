@@ -22,15 +22,19 @@ x-        parents of x
 x+        children of x
 ::x       ancestors of x (including x)
 x::       descendants of x (including x)
-x..       non-ancestors of x (x:: ~ ::x)
-..x       ancestors excluding root (::x ~ root())
+x..       revisions not ancestors of x (= ~::x)
+..x       ancestors of x (incl. x) excluding the root commit
+::        all visible commits (= all())
+..        all visible commits except the root commit
 x::y      DAG range: descendants of x that are ancestors of y
-x..y      set range: ancestors of y excluding ancestors of x
+x..y      set range: ancestors of y that are not ancestors of x
 ~x        complement (not in x)
 x & y     intersection
 x ~ y     difference (in x but not y)
 x | y     union
 ```
+
+Note: `(A | B)..` is `A.. & B..`, not `A.. | B..`.
 
 ## Functions
 
@@ -83,8 +87,9 @@ mine()                      # by current user
 committer(pattern)          # by committer
 description(pattern)        # by commit message
 files(pattern)              # touching files matching pattern
-diff_contains(text)         # diff contains text
-diff_contains(text, files)  # diff contains text in specific files
+diff_lines(text, [files])   # diff contains matching text (renamed from diff_contains in 0.38)
+diff_lines_added(text, [files])    # only the added side
+diff_lines_removed(text, [files])  # only the removed side
 ```
 
 ### State
@@ -92,22 +97,32 @@ diff_contains(text, files)  # diff contains text in specific files
 empty()                     # no file changes
 merges()                    # merge commits (2+ parents)
 conflicts()                 # commits with conflicts
+divergent()                 # divergent changes (same change ID, multiple visible commits)
 mutable()                   # mutable commits
 immutable()                 # immutable commits
 present(x)                  # x, filtering out missing commits
 ```
 
+### References (additions)
+```bash
+remote_tags()               # all remote tags (tracked 0.38+)
+remote_tags(pat, remote=pat)
+```
+
 ## String Patterns
 
-Default is substring match. Prefix with:
+**Default is `glob:`** (not substring). Quotes optional.
 ```
 exact:"string"              # exact match
-glob:"pattern"              # shell wildcard (* ? [])
+glob:"pattern"              # shell wildcard (* ? [])  ← DEFAULT
 regex:"pattern"             # regex (matches substring)
 substring:"string"          # explicit substring
 ```
 
-Case-insensitive: append `-i` (e.g., `glob-i:"*.txt"`)
+Case-insensitive: append `-i` (e.g., `glob-i:"fix*jpeg*"`).
+
+Logical combinators inside a pattern argument: `~p`, `p & q`, `p | q`, `p ~ q`
+(e.g., `bookmarks(~glob:"ci/*")`).
 
 ## Examples
 
@@ -123,6 +138,9 @@ jj log -r 'author("alice") & ancestors(@, 20)'
 
 # Commits touching file
 jj log -r 'files("src/main.rs")'
+
+# Commits that add or remove a TODO under src/
+jj log -r 'diff_lines("*TODO*", "src")'
 
 # Conflicted commits in branch
 jj log -r 'main..@ & conflicts()'

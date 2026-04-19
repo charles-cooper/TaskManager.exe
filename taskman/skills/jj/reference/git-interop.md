@@ -67,7 +67,7 @@ jj git push --change CHANGE_ID
 jj git clone --remote upstream URL
 jj git remote add origin FORK_URL
 
-# Configure in .jj/repo/config.toml:
+# Configure via `jj config edit --repo` (0.38+ stores this outside .jj/):
 # [git]
 # fetch = "upstream"
 # push = "origin"

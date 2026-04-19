@@ -3,9 +3,11 @@
 ## Config Locations (precedence order)
 
 1. CLI: `--config key=value`
-2. Repo: `.jj/repo/config.toml`
+2. Repo / workspace config (stored **outside** the repo since 0.38, under `$XDG_CONFIG_HOME/jj/repos/<hash>/`). Legacy `.jj/repo/config.toml` / `.jj/workspace-config.toml` are auto-migrated on first access.
 3. User: `~/.config/jj/config.toml` or `~/.jjconfig.toml`
 4. Built-in defaults
+
+Use `jj config path --repo` / `--user` to print the actual file path. Edit via `jj config edit --repo` / `--user` — do not hand-create `.jj/repo/config.toml` in new repos.
 
 ## Config Commands
 
@@ -83,8 +85,19 @@ s = ["st"]
 
 ```toml
 [remotes.origin]
-auto-track-bookmarks = "*"              # track all
+auto-track-bookmarks = "*"              # track all remote bookmarks on fetch
 # auto-track-bookmarks = ["main", "develop"]  # specific only
+
+# Only auto-track bookmarks that YOU create locally (0.38+):
+auto-track-created-bookmarks = "*"
+```
+
+## `jj bookmark advance` Defaults (0.39+)
+
+```toml
+[revsets]
+bookmark-advance-from = 'heads(::to & bookmarks())'  # closest ancestor bookmark
+bookmark-advance-to   = '@'                          # target
 ```
 
 ## Colors

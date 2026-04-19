@@ -18,11 +18,12 @@
 | `git rebase B A` | `jj rebase -b A -d B` |
 | `git reset --hard` | `jj abandon` (commit) / `jj restore` (files) |
 | `git reset --soft HEAD~` | `jj squash` |
-| `git cherry-pick` | `jj duplicate REV -d @` |
+| `git cherry-pick` | `jj duplicate REV -o @` (--onto) |
 | `git revert` | `jj revert -r REV` |
 | `git log --graph` | `jj log` |
 | `git blame` | `jj file annotate PATH` |
 | `git reflog` | `jj op log` |
+| `git rebase -i` (reorder) | `jj arrange` (TUI, 0.39+) or `jj rebase -r C -B/-A B` |
 
 ## Starting New Work
 
@@ -73,10 +74,13 @@ jj split -r REV               # split specific commit
 
 ```bash
 # A-B-C-D → A-C-B-D (move C before B)
-jj rebase -r C --before B
+jj rebase -r C -B B           # --insert-before (alias: --before)
 
 # A-B-C-D → A-B-D-C (move C after D)
-jj rebase -r C --after D
+jj rebase -r C -A D           # --insert-after  (alias: --after)
+
+# Or interactively (0.39+):
+jj arrange [REVSETS]          # TUI to reorder/abandon/swap commits
 ```
 
 ## Extract Commit from Middle
@@ -108,14 +112,19 @@ jj new main
 # ... work ...
 jj describe -m "feat: thing"
 jj bookmark create feature -r @
-jj git push --bookmark feature
+jj git push --bookmark feature  # auto-tracks the bookmark (0.38+)
 # create PR on GitHub
 
-# Address review
+# Address review (in-place amend)
 jj edit feature               # if not already there
-# make changes (auto-amends)
-jj bookmark move feature --to @
-jj git push --bookmark feature  # force push
+# edits auto-amend feature's commit; bookmark follows the rewrite — no manual move needed
+jj git push --bookmark feature  # force-with-lease semantics
+
+# Address review (stack a new commit first, then fold)
+jj new feature
+# ... fixups ...
+jj squash                     # fold into feature; bookmark follows
+jj git push --bookmark feature
 ```
 
 ## Keep Branch Updated with Main

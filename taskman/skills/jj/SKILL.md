@@ -7,16 +7,18 @@ description: Jujutsu version control system. Use when working with jj repositori
 
 Git-compatible VCS with cleaner model. Working copy IS a commit (`@`). No staging area. Conflicts stored in commits. Full undo via operation log.
 
-## Changes Are Never Lost
+Targets jj **0.40** (see ~/jj/docs for source of truth).
 
-jj snapshots the repo state on **every operation**. Botched merge, bad rebase, accidental abandon — the previous state is always recoverable:
+## Changes Are Rarely Lost
+
+jj snapshots the repo state on **every operation**. Botched merge, bad rebase, accidental abandon — the previous state is recoverable for as long as the operation log retains it (default: 2 weeks, pruned by `jj util gc`):
 
 ```bash
 jj op log              # find the operation before the mistake
 jj op restore OP_ID    # restore to that state
 ```
 
-**NEVER assume changes are lost after a failed operation.** Before re-doing work or panicking, check `jj op log` and restore. See [patterns/gotchas.md](patterns/gotchas.md) (Operation Restore vs Undo) for details.
+**Don't assume changes are lost after a failed operation.** Before re-doing work or panicking, check `jj op log` and restore. Caveat: **unsnapshotted** working-copy edits (file changes since the last jj command) aren't in the op log — see [gotchas](patterns/gotchas.md#snapshotting-is-not-automatic).
 
 ## Quick Reference
 
@@ -30,11 +32,13 @@ jj edit REV              # make REV the working copy
 jj squash                # fold @ into parent
 jj split                 # split @ interactively
 jj diff                  # show changes
-jj rebase -s SRC -d DST  # rebase SRC+descendants onto DST
+jj rebase -s SRC -d DST  # rebase SRC+descendants onto DST (-d is alias for --onto)
 jj abandon REV           # delete commit
 jj undo                  # undo last operation
-jj git fetch             # fetch from remote
-jj git push --bookmark B # push bookmark B
+jj op revert [OP]        # revert a specific (non-latest) operation
+jj git fetch             # fetch from remotes
+jj git push              # push tracking bookmarks in remote_bookmarks(remote)..@
+jj git push --bookmark B # push specific bookmark
 ```
 
 ## Core Concepts
@@ -47,9 +51,15 @@ jj git push --bookmark B # push bookmark B
 Working copy is commit `@`. Changes auto-amend it. No staging.
 
 ### Bookmarks
-Named pointers like git branches but **don't auto-move**. Always:
+Named pointers like git branches, with a different auto-move policy:
+- **Follow rewrites**: amending/rebasing the bookmark's commit moves the bookmark automatically (bookmarks track change IDs).
+- **Don't follow new children**: `jj new` on top of a bookmark does *not* advance it.
+
+Move manually when extending a branch:
 ```bash
 jj bookmark move NAME --to @
+# or auto-pick the closest ancestor bookmark:
+jj bookmark advance          # heads(::@ & bookmarks()) → @
 ```
 
 ### Revision Shortcuts
@@ -80,46 +90,34 @@ main..@ between main and @
 
 ## Gotchas
 
-### NEVER Use `jj workspace update-stale`
+### `jj workspace update-stale` — use with care
 
-**`jj workspace update-stale` is banned.** Do not run it.
-
-`update-stale` **snapshots the current working copy first**, then merges divergent operations, then checks out the desired commit. Unsaved edits are preserved in the snapshot and recoverable via `jj op log`.
-
-**Sequence:**
-1. Edit files in working copy (no jj command run → no snapshot yet)
-2. `@` moves via another workspace or concurrent operation
-3. `jj workspace update-stale` → snapshots edits onto old operation, merges, updates working copy
-
-**Recovery (if someone ran it anyway):** If edits appear lost after `update-stale`, they were captured in the snapshot operation. Use `jj op log` + `jj op restore OP_ID` to recover.
-
-Instead of `update-stale`, if a workspace is stale:
-1. Check `jj op log` to understand what diverged
-2. Use `jj op restore OP_ID` to get back to a known-good state
-3. Re-apply changes manually from there
-
-See [patterns/gotchas.md](patterns/gotchas.md) for details.
+Not actually data-loss prone, but easy to misread. See [patterns/gotchas.md](patterns/gotchas.md#jj-workspace-update-stale) for the full walkthrough. TL;DR: it snapshots current edits onto the stale op, then checks out the desired `@`. Your edits survive — but they now live on a side branch in the op log, which is easy to mistake for "lost".
 
 ### Snapshotting Is Not Automatic
 
 jj does NOT snapshot on file changes alone — a jj command must run to trigger it. Run `jj st` periodically after edits to capture intermediate states in the operation log.
 
-### Bookmarks Don't Auto-Move
+### Bookmarks Don't Follow New Children
 
-Unlike git branches, jj bookmarks stay put. Always move explicitly:
+Bookmarks follow **rewrites** of their target (auto-amend, rebase) but not **new commits on top**:
 ```bash
-jj bookmark move feature --to @
+jj edit feature
+# edits auto-amend feature commit → bookmark moves with it
+jj new
+# bookmark still on the PARENT, not on the new @
+jj bookmark move feature --to @   # or: jj bookmark advance feature
 ```
 
 ### Squash/Rebase Across Workspaces
 
-**NEVER squash or rebase commits that are ancestors of other workspaces.** Rewrites shared history → conflict cascade through every descendant.
+**Avoid rewriting commits that are ancestors of other workspaces' `@`.** Rewrites the shared commit → other workspaces' working copies become stale, and their descendant commits rebase onto the new version (potential conflicts).
 
 ```bash
-# WRONG: squash branch into shared ancestor
-jj squash --from feature      # rewrites @- → conflicts everywhere
+# RISKY: squash @ into @- if @- is another workspace's ancestor
+jj squash                     # rewrites @-
 
-# CORRECT: merge via new commit
+# SAFER: merge via a new commit instead of rewriting
 jj new @ feature -m "merge"   # parents untouched
 ```
 
@@ -127,27 +125,30 @@ Recovery: `jj op log` + `jj op restore <op_id>`, redo as merge.
 
 ### Divergent Changes
 
-Same change ID with multiple visible commits. Fix:
+Same change ID with multiple visible commits. A bare `xyz` errors on divergent changes — disambiguate with `xyz/0`, `xyz/1`. Fix:
 ```bash
-jj abandon xyz                # abandon one
-# or
-jj squash -r xyz/0 --into xyz/1  # merge them
+jj abandon xyz/0                       # abandon one side
+# or fold one side into the other:
+jj squash --from xyz/0 --into xyz/1
+# or give one side a fresh change-id:
+jj metaedit -r xyz/0 --update-change-id
 ```
 
-### git push Requires Bookmarks
+### git push Pushes Tracking Bookmarks
 
-`jj git push` without bookmarks is a no-op. Create/move bookmark first:
+`jj git push` (no args) pushes **tracking bookmarks** in `remote_bookmarks(remote=<remote>)..@`. If nothing in that range is a tracking bookmark, nothing gets pushed. Common pattern:
 ```bash
-jj bookmark create NAME -r @
-jj git push --bookmark NAME
+jj bookmark create NAME -r @    # or: jj bookmark set NAME -r @
+jj git push --bookmark NAME     # also auto-tracks the bookmark (0.38+)
 ```
 
-### Operation Restore vs Undo
+### Operation Restore vs Undo vs Revert
 
-- `jj undo`: last operation only
-- `jj op restore OP_ID`: any point in history
+- `jj undo` / `jj redo`: undo/redo the last operation
+- `jj op revert [OP]`: create a new operation that inverts an earlier one (replaces the removed `jj op undo`)
+- `jj op restore OP_ID`: rewind the repo to any point in history
 
-**NEVER assume changes are lost.** Check `jj op log` first.
+Before assuming changes are lost: check `jj op log`. Unsnapshotted edits are the one exception (see above).
 
 See [patterns/gotchas.md](patterns/gotchas.md) for extended gotchas (immutable commits, large files, conflict resolution, etc.)
 
