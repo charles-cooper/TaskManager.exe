@@ -1,5 +1,7 @@
 Persist knowledge to memory.
 
+When reading/updating memory, batch related file operations: read candidate memory/topic files together, and apply independent edits/writes in as few tool calls as possible.
+
 1. Choose destination:
    - Related to existing topic → update topics/TOPIC_<slug>.md
    - New topic area (3+ entries) → create topics/TOPIC_<slug>.md, add to index
@@ -13,7 +15,12 @@ Persist knowledge to memory.
 
 3. If creating new topic, add entry to MEDIUMTERM_MEM.md index
 
-4. Run: taskman sync "remember: <brief>"
+4. Batch updates where possible:
+   - Read MEDIUMTERM_MEM.md plus relevant topic files together before deciding placement
+   - Apply independent edits to multiple sections/files in one batch when your tool supports it
+   - Create/update topic + index together so they stay consistent
+
+5. Run: taskman sync "remember: <brief>"
 
 ## HOW > WHAT
 
